@@ -446,7 +446,7 @@ public:
                  ARC_substep_sum  (NumCounter("AR_step_sum")),
                  ARC_tsyn_step_sum(NumCounter("AR_tsyn_step_sum")),
                  ARC_n_groups     (NumCounter("AR_group_number")),
-                 ARC_n_groups_iso (NumCounter("Iso_gsoup_number")),
+                 ARC_n_groups_iso (NumCounter("Iso_group_number")),
                  H4_step_sum      (NumCounter("Hermite_step_sum")),
                  n_neighbor_zero  (NumCounter("Hermite_no_NB")),
                  ep_ep_interact   (NumCounter("Ep-Ep_interaction")),
@@ -454,9 +454,36 @@ public:
                  //ARC_step_group   (NumCounter("ARC step per group")),
                  n_counter(14) {}
 
-    void cluster_count(const PS::S32 n, const PS::S32 ntimes=1) {
+    void clusterCount(const PS::S32 n, const PS::S32 ntimes=1) {
         if (n_cluster.count(n)) n_cluster[n] += ntimes;
         else n_cluster[n]=ntimes;
+    }
+
+    void clearClusterCount() {
+        n_cluster.clear();
+    }
+
+    void getherClusterCount(int* n, int* count, const long unsigned int size) {
+        assert(size==n_cluster.size());
+        int index=0;
+        for(auto i=n_cluster.begin(); i!=n_cluster.end(); ++i) {
+            n[index]=i->first;
+            count[index] = i->second;
+            index++;
+        }
+    }
+
+    void copyClusterCount(SysCounts& n_count) {
+        for(auto i=n_count.n_cluster.begin(); i!=n_count.n_cluster.end(); ++i) {
+            n_cluster[i->first] = i->second;
+        }
+    }
+
+    void addClusterCount(SysCounts& n_count) {
+        for(auto i=n_count.n_cluster.begin(); i!=n_count.n_cluster.end(); ++i) {
+            if(n_cluster.count(i->first)) n_cluster[i->first] += i->second;
+            else n_cluster[i->first] = i->second;
+        }
     }
 
     void printHist(std::ostream & fout, const PS::S32 width=20, const PS::S64 n_loop=1) const {

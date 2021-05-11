@@ -65,6 +65,9 @@ int MPI_Irecv(void* buffer, int count, MPI_Datatype datatype, int dest, int tag,
 #ifdef USE_GPU
 #include"force_gpu_cuda.hpp"
 #endif
+#ifdef USE_FUGAKU
+#include "force_fugaku.hpp"
+#endif
 #include"energy.hpp"
 #include"hard.hpp"
 #include"io.hpp"
@@ -89,23 +92,19 @@ public:
     IOParamsContainer input_par_store;
     IOParams<PS::F64> ratio_r_cut;
     IOParams<PS::F64> theta;
-    IOParams<PS::S32> n_leaf_limit;
-#ifdef USE__AVX512
-    IOParams<PS::S32> n_group_limit;
-#else
-    IOParams<PS::S32> n_group_limit;
-#endif
-    IOParams<PS::S32> n_interrupt_limit;
-    IOParams<PS::S32> n_smp_ave;
+    IOParams<PS::S64> n_leaf_limit;
+    IOParams<PS::S64> n_group_limit;
+    IOParams<PS::S64> n_interrupt_limit;
+    IOParams<PS::S64> n_smp_ave;
 #ifdef ORBIT_SAMPLING
-    IOParams<PS::S32> n_split;
+    IOParams<PS::S64> n_split;
 #endif
     IOParams<PS::S64> n_bin;
-    IOParams<PS::F64> n_step_per_orbit;
+    IOParams<PS::S64> n_step_per_orbit;
     IOParams<PS::F64> time_end;
     IOParams<PS::F64> eta;
     IOParams<PS::F64> gravitational_constant;
-    IOParams<PS::S32> unit_set;
+    IOParams<PS::S64> unit_set;
     IOParams<PS::S64> n_glb;
     IOParams<PS::S64> id_offset;
     IOParams<PS::F64> dt_soft;
@@ -113,15 +112,15 @@ public:
     IOParams<PS::F64> search_vel_factor;
     IOParams<PS::F64> search_peri_factor;
     IOParams<PS::F64> dt_limit_hard_factor;
-    IOParams<PS::S32> dt_min_hermite_index;
-    IOParams<PS::S32> dt_min_arc_index;
-    IOParams<PS::F64> dt_err_pert;
-    IOParams<PS::F64> dt_err_soft;
-    IOParams<PS::F64> e_err_arc;
+    IOParams<PS::S64> dt_min_hermite_index;
+    //IOParams<PS::S64> dt_min_ar_index;
+    //IOParams<PS::F64> dt_err_pert;
+    //IOParams<PS::F64> dt_err_soft;
+    IOParams<PS::F64> e_err_ar;
 #ifdef HARD_CHECK_ENERGY
     IOParams<PS::F64> e_err_hard;
 #endif
-    IOParams<PS::S32> step_limit_arc;
+    IOParams<PS::S64> step_limit_ar;
     IOParams<PS::F64> eps;
     IOParams<PS::F64> r_out;
     IOParams<PS::F64> r_bin;
@@ -129,16 +128,16 @@ public:
     IOParams<PS::F64> r_search_min;
     IOParams<PS::F64> r_escape;
     IOParams<PS::F64> sd_factor;
-    IOParams<PS::S32> data_format;
-    IOParams<PS::S32> write_style;
+    IOParams<PS::S64> data_format;
+    IOParams<PS::S64> write_style;
 #ifdef STELLAR_EVOLUTION
-    IOParams<PS::S32> stellar_evolution_option;
+    IOParams<PS::S64> stellar_evolution_option;
 #endif
-    IOParams<PS::S32> interrupt_detection_option;
+    IOParams<PS::S64> interrupt_detection_option;
 #ifdef ADJUST_GROUP_PRINT
-    IOParams<PS::S32> adjust_group_write_option;
+    IOParams<PS::S64> adjust_group_write_option;
 #endif
-    IOParams<PS::S32> append_switcher;
+    IOParams<PS::S64> append_switcher;
     IOParams<std::string> fname_snp;
     IOParams<std::string> fname_par;
     IOParams<std::string> fname_inp;
@@ -149,68 +148,68 @@ public:
     bool update_rsearch_flag;
 
     IOParamsPeTar(): input_par_store(), 
-                     ratio_r_cut  (input_par_store, 0.1,  "r_in / r_out"),
-                     theta        (input_par_store, 0.3,  "Openning angle theta"),
-                     n_leaf_limit (input_par_store, 20,   "Tree leaf number limit", "optimized value shoudl be slightly >=11+N_bin_sample (20)"),
+                     ratio_r_cut      (input_par_store, 0.1,  "r-ratio", "r_in / r_out"),
+                     theta            (input_par_store, 0.3,  "T",  "Openning angle theta"),
+                     n_leaf_limit     (input_par_store, 20,   "number-leaf-limit", "Tree leaf number limit", "optimized value shoudl be slightly >=11+N_bin_sample (20)"),
 #ifdef USE__AVX512
-                     n_group_limit(input_par_store, 1024, "Tree group number limit", "optimized for x86-AVX512 (1024)"),    
+                     n_group_limit    (input_par_store, 1024, "number-group-limit", "Tree group number limit", "optimized for x86-AVX512 (1024)"),    
 #else
-                     n_group_limit(input_par_store, 512,  "Tree group number limit", "optimized for x86-AVX2 (512)"),
+                     n_group_limit    (input_par_store, 512,  "number-group-limit", "Tree group number limit", "optimized for x86-AVX2 (512)"),
 #endif
-                     n_interrupt_limit(input_par_store, 128, "Interrupt binary number limit"),
-                     n_smp_ave    (input_par_store, 100,  "Average target number of sample particles per process"),
+                     n_interrupt_limit(input_par_store, 128,  "number-interrupt-limit", "Interrupt binary number limit"),
+                     n_smp_ave        (input_par_store, 100,  "number-sample-average", "Average target number of sample particles per process"),
 #ifdef ORBIT_SAMPLING
-                     n_split      (input_par_store, 4,    "Number of binary sample points for tree perturbation force"),
+                     n_split          (input_par_store, 4,    "number-split", "Number of binary sample points for tree perturbation force"),
 #endif
-                     n_bin        (input_par_store, 0,    "Number of binaries used for initialization (assume binaries ID=1,2*n_bin)"),
-                     n_step_per_orbit(input_par_store, 8, "Number of steps per slow-down binary orbits (binary period/tree timestep) for isolated binaries; also the maximum criterion for switching on tidal tensor method"),
-                     time_end     (input_par_store, 10.0, "Finishing time"),
-                     eta          (input_par_store, 0.1,  "Hermite time step coefficient eta"),
-                     gravitational_constant(input_par_store, 1.0,  "Gravitational constant"),
-                     unit_set     (input_par_store, 0,    "Input data unit, 0: unknown, referring to G; 1: mass:Msun, length:pc, time:Myr, velocity:pc/Myr"),
-                     n_glb        (input_par_store, 100000,  "Total number of particles, only used to generate particles if no input datafile exists"),
-                     id_offset    (input_par_store, -1,   "Starting id for artificial particles, total number of real particles must be always smaller than this","n_glb+1"),
-                     dt_soft      (input_par_store, 0.0,  "Tree timestep, if value is zero, use 0.1*r_out/sigma_1D"),
-                     dt_snap      (input_par_store, 1.0,  "Output time interval of particle dataset snapshot"),
-                     search_vel_factor (input_par_store, 3.0,  "Neighbor searching coefficient for velocity check (v*dt)"),
-                     search_peri_factor(input_par_store, 1.5,  "Neighbor searching coefficient for peri-center check"),
-                     dt_limit_hard_factor(input_par_store, 4.0,  "Limit of tree time step/hard time step"),
-                     dt_min_hermite_index(input_par_store, 40,   "Power index n for the smallest time step (0.5^n) allowed in Hermite integrator"),
-                     dt_min_arc_index    (input_par_store, 64,   "Power index n for the smallest time step (0.5^n) allowed in ARC integrator, suppressed"),
-                     dt_err_pert  (input_par_store, 1e-6, "Time synchronization maximum (relative) error for perturbed ARC integrator, suppressed"),
-                     dt_err_soft  (input_par_store, 1e-3, "Time synchronization maximum (relative) error for no-perturber (only soft perturbation) ARC integrator, suppressed"),
-                     e_err_arc    (input_par_store, 1e-8,"Maximum energy error allown for ARC integrator"),
+                     n_bin            (input_par_store, 0,    "b", "Number of binaries used for initialization (assuming the binaries ID=1,2*n_bin)"),
+                     n_step_per_orbit (input_par_store, 8,    "number-step-tt", "Number of steps per slow-down binary orbits (binary period/tree timestep) for isolated binaries; also the maximum criterion for switching on tidal tensor method"),
+                     time_end         (input_par_store, 10.0, "t", "Finishing time"),
+                     eta              (input_par_store, 0.1,  "hermite-eta", "Hermite time step coefficient eta"),
+                     gravitational_constant(input_par_store, 1.0, "G", "Gravitational constant"),
+                     unit_set         (input_par_store, 0,    "u", "Input data unit, 0: unknown, referring to G; 1: mass:Msun, length:pc, time:Myr, velocity:pc/Myr"),
+                     n_glb            (input_par_store, 100000, "n", "Total number of particles, only used for a test using the internal equal-mass Plummer model generator (assuming G=1 and the input data filename is __Plummer)"),
+                     id_offset        (input_par_store, -1,   "id-offset", "Starting id for artificial particles, total number of real particles must be always smaller than this","n_glb+1"),
+                     dt_soft          (input_par_store, 0.0,  "s", "Tree timestep, if value is zero, use 0.1*r_out/sigma_1D"),
+                     dt_snap          (input_par_store, 1.0,  "o", "Output time interval of particle dataset snapshot"),
+                     search_vel_factor(input_par_store, 3.0,  "search-vel-factor", "Neighbor searching coefficient for velocity check (v*dt)"),
+                     search_peri_factor  (input_par_store, 1.5, "search-peri-factor", "Neighbor searching coefficient for peri-center check"),
+                     dt_limit_hard_factor(input_par_store, 4.0, "dt-max-factor", "Limit of tree time step/hard time step"),
+                     dt_min_hermite_index(input_par_store, 40,  "dt-min-hermite",  "Power index n for the smallest time step (0.5^n) allowed in Hermite integrator"),
+                     //dt_min_ar_index     (input_par_store, 64,  "dt-min-ar",  "Power index n for the smallest time step (0.5^n) allowed in ARC integrator, suppressed"),
+                     //dt_err_pert  (input_par_store, 1e-6, "dt-error-pert", "Time synchronization maximum (relative) error for perturbed ARC integrator, suppressed"),
+                     //dt_err_soft  (input_par_store, 1e-3, "dt-error-iso", "Time synchronization maximum (relative) error for no-perturber (only soft perturbation) ARC integrator, suppressed"),
+                     e_err_ar     (input_par_store, 1e-8, "energy-err-ar", "Maximum energy error allown for ARC integrator"),
 #ifdef HARD_CHECK_ENERGY
-                     e_err_hard   (input_par_store, 1e-4, "Maximum energy error allown for hard integrator"),
+                     e_err_hard   (input_par_store, 1e-4, "energy-err-hard", "Maximum energy error allown for hard integrator"),
 #endif
-                     step_limit_arc(input_par_store, 1000000, "Maximum step allown for ARC sym integrator"),
-                     eps          (input_par_store, 0.0,  "Softerning eps"),
-                     r_out        (input_par_store, 0.0,  "Transit function outer boundary radius, if value is zero, use 0.1 GM/[N^(1/3) sigma_3D^2]"),
-                     r_bin        (input_par_store, 0.0,  "Tidal tensor box size and binary radius criterion, if value iszero, use 0.8*r_in"),
+                     step_limit_ar(input_par_store, 1000000, "step-limit-ar", "Maximum step allown for ARC sym integrator"),
+                     eps          (input_par_store, 0.0,  "soft-eps", "Softerning eps"),
+                     r_out        (input_par_store, 0.0,  "r", "Changeover function outer boundary radius, if value is zero, use 0.1 GM/[N^(1/3) sigma_3D^2]"),
+                     r_bin        (input_par_store, 0.0,  "r-bin", "Tidal tensor box size and binary radius criterion, if value is zero, use 0.8*r_in"),
 //                     r_search_max (input_par_store, 0.0,  "Maximum search radius criterion", "5*r_out"),
-                     r_search_min (input_par_store, 0.0,  "Minimum search radius  value","auto"),
-                     r_escape     (input_par_store, PS::LARGE_FLOAT,  "escape radius criterion, if <0, remove particles when r>-r_escape; else, remove particle when r>r_escape and energy>0"),
-                     sd_factor    (input_par_store, 1e-4, "Slowdown perturbation criterion"),
-                     data_format  (input_par_store, 1,    "Data read(r)/write(w) format BINARY(B)/ASCII(A): r-B/w-A (3), r-A/w-B (2), rw-A (1), rw-B (0)"),
-                     write_style  (input_par_store, 1,    "File Writing style: 0, no output; 1. write snapshots, status and profile separately; 2. write snapshot and status in one line per step (no MPI support); 3. write only status and profile"),
+                     r_search_min (input_par_store, 0.0,  "r-search-min", "Minimum search radius  value","auto"),
+                     r_escape     (input_par_store, PS::LARGE_FLOAT,  "r-escape", "Escape radius criterion, 0: no escaper removement; <0: remove particles when r>-r_escape; >0: remove particle when r>r_escape and energy>0"),
+                     sd_factor    (input_par_store, 1e-4, "slowdown-factor", "Slowdown perturbation criterion"),
+                     data_format  (input_par_store, 1,    "i", "Data read(r)/write(w) format BINARY(B)/ASCII(A): r-B/w-A (3), r-A/w-B (2), rw-A (1), rw-B (0)"),
+                     write_style  (input_par_store, 1,    "w", "File Writing style: 0, no output; 1. write snapshots, status and profile separately; 2. write snapshot and status in one line per step (no MPI support); 3. write only status and profile"),
 #ifdef STELLAR_EVOLUTION
-#ifdef BSE
-                     stellar_evolution_option(input_par_store, 1, "modify single star: 0: turn off; 1: modify mass and velocity using SSE every Hermite step, log files with names of [data filename prefix].[sse/bse].[MPI rank] are generated if -w >0"),
-                     interrupt_detection_option(input_par_store, 1, "modify orbits of binaries: 0: no modifications (also no stellar evolution); 1: modify the binary orbits using BSE (if '--stellar-evolution 1' is set) and merger checker in AR integrator"),
+#ifdef BSE_BASE
+                     stellar_evolution_option  (input_par_store, 1, "stellar-evolution", "modify single star: 0: turn off; 1: modify mass and velocity using SSE every Hermite step, log files with names of [data filename prefix].[sse/bse].[MPI rank] are generated if -w >0"),
+                     interrupt_detection_option(input_par_store, 1, "detect-interrupt", "modify orbits of binaries: 0: no modifications (also no stellar evolution); 1: modify the binary orbits using BSE (if '--stellar-evolution 1' is set) and merger checker in AR integrator"),
 #else
-                     stellar_evolution_option(input_par_store, 0, "modify mass of particles: 0: turn off; 1: check every Hermite steps"),
-                     interrupt_detection_option(input_par_store, 0, "modify orbits of AR groups and check interruption: 0: turn off; 1: modify the binary orbits based on detetion criterion; 2. modify and also interrupt the hard drift"),
+                     stellar_evolution_option  (input_par_store, 0, "stellar-evolution", "modify mass of particles: 0: turn off; 1: check every Hermite steps"),
+                     interrupt_detection_option(input_par_store, 0, "detect-interrupt", "modify orbits of AR groups and check interruption: 0: turn off; 1: modify the binary orbits based on detetion criterion; 2. modify and also interrupt the hard drift"),
 #endif
 #else
-                     interrupt_detection_option(input_par_store, 0, "modify orbits of AR groups based on the interruption function: 0: turn off; 1: modify inside AR integration and accumulate energy change; 2. modify and also interrupt the hard drift"),
+                     interrupt_detection_option(input_par_store, 0, "detect-interrupt", "modify orbits of AR groups based on the interruption function: 0: turn off; 1: modify inside AR integration and accumulate energy change; 2. modify and also interrupt the hard drift"),
 #endif
 #ifdef ADJUST_GROUP_PRINT
-                     adjust_group_write_option(input_par_store, 1, "print new and end of groups: 0: no print; 1: print to file [data filename prefix].group.[MPI rank] if -w >0"),
+                     adjust_group_write_option(input_par_store, 1, "write-group-info", "print new and end of groups: 0: no print; 1: print to file [data filename prefix].group.[MPI rank] if -w >0"),
 #endif
-                     append_switcher(input_par_store, 1, "data output style, 0: create new output files and overwrite existing ones except snapshots; 1: append new data to existing files"),
-                     fname_snp(input_par_store, "data","Prefix filename of dataset: [prefix].[File ID]"),
-                     fname_par(input_par_store, "input.par", "Input parameter file (this option should be used first before any other options)"),
-                     fname_inp(input_par_store, "__NONE__", "Input data file"),
+                     append_switcher(input_par_store, 1, "a", "data output style, 0: create new output files and overwrite existing ones except snapshots; 1: append new data to existing files"),
+                     fname_snp(input_par_store, "data", "f", "Prefix filename of dataset: [prefix].[File ID]"),
+                     fname_par(input_par_store, "input.par", "p", "Input parameter file (this option should be used first before any other options)"),
+                     fname_inp(input_par_store, "__NONE__", "snap-filename", "Input data file", NULL, false),
                      print_flag(false), update_changeover_flag(false), update_rsearch_flag(false) {}
 
     
@@ -225,37 +224,37 @@ public:
         static int petar_flag=-1;
         static struct option long_options[] = {
 #ifdef ORBIT_SAMPLING
-            {"number-split",          required_argument, &petar_flag, 0},        
+            {n_split.key,              required_argument, &petar_flag, 0},        
 #endif
-            {"search-vel-factor",     required_argument, &petar_flag, 1},  
-            {"dt-max-factor",         required_argument, &petar_flag, 2},  
-            {"dt-min-hermite",        required_argument, &petar_flag, 3}, 
-            {"number-group-limit",    required_argument, &petar_flag, 4},
-            {"number-leaf-limit",     required_argument, &petar_flag, 5},
-            {"number-sample-average", required_argument, &petar_flag, 6},
-            {"energy-err-arc",        required_argument, &petar_flag, 7}, 
-            {"soft-eps",              required_argument, &petar_flag, 8},       
-            {"slowdown-factor",       required_argument, &petar_flag, 9},
-            {"r-ratio",               required_argument, &petar_flag, 10},
-            {"r-bin",                 required_argument, &petar_flag, 11},       
-            {"r-escape",              required_argument, &petar_flag, 21},
-            {"r-search-min",          required_argument, &petar_flag, 22},
-            {"id-offset",             required_argument, &petar_flag, 23},
-            {"search-peri-factor",    required_argument, &petar_flag, 12}, 
-            {"hermite-eta",           required_argument, &petar_flag, 13}, 
+            {search_vel_factor.key,    required_argument, &petar_flag, 1},  
+            {dt_limit_hard_factor.key, required_argument, &petar_flag, 2},  
+            {dt_min_hermite_index.key, required_argument, &petar_flag, 3}, 
+            {n_group_limit.key,        required_argument, &petar_flag, 4},
+            {n_leaf_limit.key,         required_argument, &petar_flag, 5},
+            {n_smp_ave.key,            required_argument, &petar_flag, 6},
+            {e_err_ar.key,             required_argument, &petar_flag, 7}, 
+            {eps.key,                  required_argument, &petar_flag, 8},       
+            {sd_factor.key,            required_argument, &petar_flag, 9},
+            {ratio_r_cut.key,          required_argument, &petar_flag, 10},
+            {r_bin.key,                required_argument, &petar_flag, 11},       
+            {search_peri_factor.key,   required_argument, &petar_flag, 12}, 
+            {eta.key,                  required_argument, &petar_flag, 13}, 
 #ifdef HARD_CHECK_ENERGY
-            {"energy-err-hard",       required_argument, &petar_flag, 14},  
+            {e_err_hard.key,           required_argument, &petar_flag, 14},  
 #endif
-            {"step-limit-arc",        required_argument, &petar_flag, 15},   
-            {"disable-print-info",    no_argument,       &petar_flag, 16},
-            {"number-interrupt-limt", required_argument, &petar_flag, 17},
-            {"detect-interrupt",      required_argument, &petar_flag, 18},
-            {"number-step-tt",        required_argument, &petar_flag, 19},
+            {step_limit_ar.key,        required_argument, &petar_flag, 15},   
+            {"disable-print-info",     no_argument,       &petar_flag, 16},
+            {n_interrupt_limit.key,    required_argument, &petar_flag, 17},
+            {interrupt_detection_option.key,  required_argument, &petar_flag, 18},
+            {n_step_per_orbit.key,     required_argument, &petar_flag, 19},
 #ifdef STELLAR_EVOLUTION
-            {"stellar-evolution",     required_argument, &petar_flag, 20},
+            {stellar_evolution_option.key,    required_argument, &petar_flag, 20},
 #endif
+            {r_escape.key,             required_argument, &petar_flag, 21},
+            {r_search_min.key,         required_argument, &petar_flag, 22},
+            {id_offset.key,            required_argument, &petar_flag, 23},
 #ifdef ADJUST_GROUP_PRINT
-            {"write-group-info",      required_argument, &petar_flag, 24},
+            {adjust_group_write_option.key,   required_argument, &petar_flag, 24},
 #endif            
             {"help",                  no_argument, 0, 'h'},        
             {0,0,0,0}
@@ -281,6 +280,7 @@ public:
                     search_vel_factor.value = atof(optarg);
                     if(print_flag) search_vel_factor.print(std::cout);
                     opt_used += 2;
+                    update_rsearch_flag = true;
                     assert(search_vel_factor.value>0.0);
                     break;
                 case 2:
@@ -314,10 +314,10 @@ public:
                     assert(n_smp_ave.value>0.0);
                     break;
                 case 7:
-                    e_err_arc.value = atof(optarg);
-                    if(print_flag) e_err_arc.print(std::cout);
+                    e_err_ar.value = atof(optarg);
+                    if(print_flag) e_err_ar.print(std::cout);
                     opt_used += 2;
-                    assert(e_err_arc.value > 0.0);
+                    assert(e_err_ar.value > 0.0);
                     break;
                 case 8:
                     eps.value = atof(optarg);
@@ -365,8 +365,8 @@ public:
                     break;
 #endif
                 case 15:
-                    step_limit_arc.value = atoi(optarg);
-                    if(print_flag) step_limit_arc.print(std::cout);
+                    step_limit_ar.value = atoi(optarg);
+                    if(print_flag) step_limit_ar.print(std::cout);
                     opt_used += 2;
                     break;
                 case 16:
@@ -530,59 +530,18 @@ public:
                              <<"             1. File_ID: 0 for initialization, else for restarting\n"
                              <<"             2. N_particle \n"
                              <<"             3. Time\n"
+#ifdef RECORD_CM_IN_HEADER
+                             <<"             4-6: offset of system centeral position (assuming galactic center is the coordiante origin in the case of Galpy)\n"
+                             <<"             7-9: offset of system centeral velocity\n"
+#endif
                              <<"            Following lines:\n";
                     FPSoft::printTitleWithMeaning(std::cout,0,13);
                     std::cout<<"          PS: (*) show initialization values which should be used together with FILE_ID = 0"<<std::endl;
                     std::cout<<"              [formatted] indicates that the value is only for save, cannot be directly read"<<std::endl;
-                    std::cout<<"Options:  defaulted values are shown after ':'"<<std::endl;
-                    std::cout<<"  -i: [I] "<<data_format<<std::endl;
-                    std::cout<<"         --id-offset:        [I]"<<id_offset<<std::endl;
-                    std::cout<<"  -a: [I] "<<append_switcher<<std::endl;
-                    std::cout<<"  -t: [F] "<<time_end<<std::endl;
-                    std::cout<<"  -s: [F] "<<dt_soft<<std::endl;
-                    std::cout<<"  -o: [F] "<<dt_snap<<std::endl;
-                    std::cout<<"        --detect-interrupt:  [I] "<<interrupt_detection_option<<std::endl;
-                    std::cout<<"        --dt-max-factor:     [F] "<<dt_limit_hard_factor<<std::endl;
-                    std::cout<<"        --dt-min-hermite:    [I] "<<dt_min_hermite_index<<std::endl;
+                    std::cout<<"Options:\n";
+                    input_par_store.printHelp(std::cout, 2, 10, 23);
                     std::cout<<"        --disable-print-info:  "<<"Do not print information"<<std::endl;
                     std::cout<<"        --disable-write-info:  "<<"Do not write information"<<std::endl;
-                    std::cout<<"  -r: [F] "<<r_out<<std::endl;
-                    std::cout<<"        --r-ratio:           [F] "<<ratio_r_cut<<std::endl;
-                    std::cout<<"        --r-bin:             [F] "<<r_bin<<std::endl;
-                    std::cout<<"        --r-escape:          [F] "<<r_escape<<std::endl;
-		    std::cout<<"        --r-search-min:      [F] "<<r_search_min<<std::endl;
-                    std::cout<<"  -b: [I] "<<n_bin<<std::endl;
-                    std::cout<<"  -n: [I] "<<n_glb<<std::endl;
-#ifdef ORBIT_SAMPLING
-                    std::cout<<"        --number-split:           [I] "<<n_split<<std::endl;
-#endif
-                    std::cout<<"        --number-group-limit:     [I] "<<n_group_limit<<std::endl;
-                    std::cout<<"        --number-leaf-limit:      [I] "<<n_leaf_limit<<std::endl;
-                    std::cout<<"        --number-interrupt-limit: [I] "<<n_interrupt_limit<<std::endl;
-                    std::cout<<"        --number-sample-average:  [I] "<<n_smp_ave<<std::endl;
-                    std::cout<<"        --number-step-tt:         [F] "<<n_step_per_orbit<<std::endl;
-                    std::cout<<"  -G: [F] "<<gravitational_constant<<std::endl;
-                    std::cout<<"  -u: [I] "<<unit_set<<std::endl;
-                    std::cout<<"  -T: [F] "<<theta<<std::endl;
-                    std::cout<<"        --hermite-eta:       [F] "<<eta<<std::endl;
-                    std::cout<<"        --search-vel-factor: [F] "<<search_vel_factor<<std::endl;
-                    std::cout<<"        --search-peri-factor:[F] "<<search_peri_factor<<std::endl;
-                    std::cout<<"        --energy-err-arc:    [F] "<<e_err_arc<<std::endl;
-#ifdef HARD_CHECK_ENERGY
-                    std::cout<<"        --energy-err-hard:   [F] "<<e_err_hard<<std::endl;
-#endif
-                    std::cout<<"        --step-limit-arc:    [F] "<<step_limit_arc<<std::endl;
-#ifdef STELLAR_EVOLUTION
-                    std::cout<<"        --stellar-evolution: [I] "<<stellar_evolution_option<<std::endl;
-#endif
-                    std::cout<<"        --slowdown-factor:   [F] "<<sd_factor<<std::endl;
-                    std::cout<<"        --soft-eps:          [F] "<<eps<<std::endl;
-                    std::cout<<"  -f: [S] "<<fname_snp<<std::endl;
-                    std::cout<<"  -p: [S] "<<fname_par<<std::endl;
-                    std::cout<<"  -w: [I] "<<write_style<<std::endl;
-#ifdef ADJUST_GROUP_PRINT
-                    std::cout<<"        --write-group-info:  [I] "<<adjust_group_write_option<<std::endl;
-#endif
                     std::cout<<"  -h(--help):               print help"<<std::endl;
                     std::cout<<"*** PS: r_in : transit function inner boundary radius\n"
                              <<"        r_out: transit function outer boundary radius\n"
@@ -619,7 +578,7 @@ public:
         assert(search_vel_factor.value>0.0);
         assert(dt_limit_hard_factor.value > 0.0);
         assert(dt_min_hermite_index.value > 0);
-        assert(e_err_arc.value > 0.0);
+        assert(e_err_ar.value > 0.0);
         assert(eps.value>=0.0);
         assert(sd_factor.value>0.0);
         assert(ratio_r_cut.value>0.0);
@@ -660,9 +619,16 @@ public:
 
     // IO
     IOParamsPeTar input_parameters;
-#ifdef BSE
+#ifdef BSE_BASE
     IOParamsBSE bse_parameters;
-#endif
+#ifdef BSE
+    std::string fbse_par_suffix=".bse";
+    std::string fsse_par_suffix=".sse";
+#elif MOBSE
+    std::string fbse_par_suffix=".mobse";
+    std::string fsse_par_suffix=".mosse";
+#endif // BSE/MOBSE
+#endif // BSE_BASE
 #ifdef GALPY
     IOParamsGalpy galpy_parameters;
 #endif
@@ -743,7 +709,7 @@ public:
     //! initialization
     PeTar(): 
         input_parameters(),
-#ifdef BSE
+#ifdef BSE_BASE
         bse_parameters(),
 #endif
 #ifdef GALPY
@@ -795,10 +761,12 @@ public:
         tree_nb.clearNumberOfInteraction();
         tree_nb.clearTimeProfile();
 #endif
-#ifndef USE_SIMD
-        tree_nb.calcForceAllAndWriteBack(SearchNeighborEpEpNoSimd(), system_soft, dinfo);
-#else
+#ifdef USE_SIMD
         tree_nb.calcForceAllAndWriteBack(SearchNeighborEpEpSimd(), system_soft, dinfo);
+#elif USE_FUGAKU
+        tree_nb.calcForceAllAndWriteBack(SearchNeighborEpEpFugaku(), system_soft, dinfo);
+#else
+        tree_nb.calcForceAllAndWriteBack(SearchNeighborEpEpNoSimd(), system_soft, dinfo);
 #endif
         
 #ifdef PROFILE
@@ -906,35 +874,42 @@ public:
         tree_soft.clearTimeProfile();
 #endif
 
-#ifndef USE_SIMD
-        tree_soft.calcForceAllAndWriteBack(CalcForceEpEpWithLinearCutoffNoSimd(),
-#ifdef USE_QUAD
-                                           CalcForceEpSpQuadNoSimd(),
-#else
-                                           CalcForceEpSpMonoNoSimd(),
-#endif
-                                           system_soft,
-                                           dinfo);
-#elif USE_GPU
+#ifdef USE_GPU
         const PS::S32 n_walk_limit = 200;
         const PS::S32 tag_max = 1;
+        PS::F64 eps2 = EPISoft::eps*EPISoft::eps;
+        PS::F64 rout2 = EPISoft::r_out*EPISoft::r_out;
+        PS::F64 G= ForceSoft::grav_const;
 #ifdef PARTICLE_SIMULATOR_GPU_MULIT_WALK_INDEX
-        tree_soft.calcForceAllAndWriteBackMultiWalkIndex(DispatchKernelWithSPIndex,
-                                                         RetrieveKernel,
+        tree_soft.calcForceAllAndWriteBackMultiWalkIndex(CalcForceWithLinearCutoffCUDAMultiWalk(my_rank, eps2, rout2, G),
+                                                         RetrieveForceCUDA,
                                                          tag_max,
                                                          system_soft,
                                                          dinfo,
                                                          n_walk_limit);
 #else // no multi-walk index
-        tree_soft.calcForceAllAndWriteBackMultiWalk(DispatchKernelWithSP,
-                                                    RetrieveKernel,
+        tree_soft.calcForceAllAndWriteBackMultiWalk(CalcForceWithLinearCutoffCUDA(my_rank, eps2, rout2, G),
+                                                    RetrieveForceCUDA,
                                                     tag_max,
                                                     system_soft,
                                                     dinfo,
                                                     n_walk_limit);
 #endif // multi-walk index
 
-#else // end gpu
+#elif USE_FUGAKU
+        PS::F64 eps2 = EPISoft::eps*EPISoft::eps;
+        PS::F64 rout2 = EPISoft::r_out*EPISoft::r_out;
+        PS::F64 G= ForceSoft::grav_const;
+        tree_soft.calcForceAllAndWriteBack(CalcForceEpEpWithLinearCutoffFugaku(eps2, rout2, G),
+#ifdef USE_QUAD
+                                           CalcForceEpSpQuadFugaku(eps2, G),
+#else // no quad
+                                           CalcForceEpSpMonoFugaku(eps2, G),
+#endif // end quad
+                                           system_soft,
+                                           dinfo);
+        
+#elif USE_SIMD // end use_gpu
         tree_soft.calcForceAllAndWriteBack(CalcForceEpEpWithLinearCutoffSimd(),
 #ifdef USE_QUAD
                                            CalcForceEpSpQuadSimd(),
@@ -943,7 +918,16 @@ public:
 #endif // end quad
                                            system_soft,
                                            dinfo);
-#endif // end gpu
+#else // end use_simd
+        tree_soft.calcForceAllAndWriteBack(CalcForceEpEpWithLinearCutoffNoSimd(),
+#ifdef USE_QUAD
+                                           CalcForceEpSpQuadNoSimd(),
+#else
+                                           CalcForceEpSpMonoNoSimd(),
+#endif
+                                           system_soft,
+                                           dinfo);
+#endif // end else
 
 #ifdef PROFILE
         n_count.ep_ep_interact     += tree_soft.getNumberOfInteractionEPEPLocal();
@@ -1044,17 +1028,29 @@ public:
 
 #ifdef GALPY
         // external force and potential
+        // update the types and arguments if reading from the configure file
+        galpy_manager.updateTypesAndArgsFromFile(stat.time, input_parameters.print_flag);
+
         PS::S64 n_loc_all = system_soft.getNumberOfParticleLocal();
 #pragma omp parallel for
         for (int i=0; i<n_loc_all; i++) {
             auto& pi = system_soft[i];
             double acc[3], pot;
-            galpy_manager.calcAccPot(acc, pot, stat.time, &pi.pos[0]);
+#ifdef RECORD_CM_IN_HEADER
+            PS::F64vec pos_correct=pi.pos + stat.pcm.pos;
+            galpy_manager.calcAccPot(acc, pot, stat.time, &pos_correct[0], &pi.pos[0]);
+#else
+            PS::F64vec pos_center=pi.pos - stat.pcm.pos;
+            galpy_manager.calcAccPot(acc, pot, stat.time, &pi.pos[0], &pos_center[0]);
+#endif
             pi.acc[0] += acc[0]; 
             pi.acc[1] += acc[1]; 
             pi.acc[2] += acc[2]; 
             pi.pot_tot += pot;
             pi.pot_soft += pot;
+#ifdef EXTERNAL_POT_IN_PTCL
+            pi.pot_ext = pot;
+#endif
         }
 #endif //GALPY
         
@@ -1065,31 +1061,44 @@ public:
 #endif
     }
 
-    // correct vel_cm due to external potential for rsearch calculation
+    // correct c.m. vel due to external potential to avoid large rsearch 
     void correctPtclVelCM(const PS::F64& _dt) {
-#ifdef PROFILE
-        profile.other.start();
-#endif
         PS::F64vec dv=PS::F64vec(0.0);
-
+ 
 #ifdef GALPY
         PS::F64vec acc;
         PS::F64 pot;
         // evaluate center of mass acceleration
-        galpy_manager.calcAccPot(&acc[0], pot, stat.time, &stat.pcm.pos[0]);
+        PS::F64vec pos_zero=PS::F64vec(0.0);
+        galpy_manager.calcAccPot(&acc[0], pot, stat.time, &stat.pcm.pos[0], &pos_zero[0]);
         dv = acc*_dt;
 #endif        
 
-        Ptcl::vel_cm += dv;
+        stat.pcm.vel += dv;
+        for (int i=0; i<stat.n_all_loc; i++) system_soft[i].vel -= dv;
+
+        //auto& adr = search_cluster.getAdrSysOneCluster();
+        //for (int i=0; i<adr.size(); i++) system_soft[adr[i]].vel -= dv;
+
+        auto& ptcl_iso=system_hard_isolated.getPtcl();
+        for (int i=0; i<ptcl_iso.size(); i++) ptcl_iso[i].vel -= dv;
+
+        //const PS::S64 n_tot= system_soft.getNumberOfParticleLocal();
+        //const PS::S32 n_artifical_per_group = hard_manager.ap_manager.getArtificialParticleN();
+        //for(PS::S32 i=stat.n_real_loc; i<n_tot; i+= n_artifical_per_group) {
+        //    auto* pcm = hard_manager.ap_manager.getCMParticles(&(system_soft[i]));
+        //    pcm->vel -= dv;
+        //}        
+
+#ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
+        auto& ptcl_con=system_hard_connected.getPtcl();
+        for (int i=0; i<ptcl_con.size(); i++) ptcl_con[i].vel -= dv;
+#endif
+
+      //Ptcl::vel_cm += dv;
 //#ifdef PETAR_DEBUG
 //        if (my_rank==0) std::cerr<<"Ptcl::vel_cm: "<<Ptcl::vel_cm<<std::endl;
 //#endif
-
-#ifdef PROFILE
-        profile.other.barrier();
-        PS::Comm::barrier();
-        profile.other.end();
-#endif
     }
 
 #ifdef KDKDK_4TH
@@ -1316,6 +1325,7 @@ public:
 #ifdef PROFILE
         profile.kick.start();
 #endif
+
         /// Member mass are recovered
         // single and reset particle type to single (due to binary disruption)
         kickOne(system_soft, _dt_kick, search_cluster.getAdrSysOneCluster());
@@ -1332,6 +1342,12 @@ public:
         // send kicked particle from sending list, and receive remote single particle
         search_cluster.SendSinglePtcl(system_soft, system_hard_connected.getPtcl());
 #endif
+
+#ifdef RECORD_CM_IN_HEADER
+        // correct Ptcl:vel_cm
+        correctPtclVelCM(_dt_kick);
+#endif
+
 
         time_kick += _dt_kick;
 
@@ -1463,6 +1479,8 @@ public:
         profile.hard_connected.end();
 #endif
 #endif
+        // drift cm
+        stat.pcm.pos += stat.pcm.vel*_dt_drift;
         
         if (n_interrupt_glb==0) Ptcl::group_data_mode = GroupDataMode::cm;
         
@@ -1735,7 +1753,11 @@ public:
         if (_initial_flag) {
             // calculate initial energy
             stat.energy.clear();
+#ifdef RECORD_CM_IN_HEADER
+            stat.energy.calc(&system_soft[0], stat.n_real_loc, true, &(stat.pcm.pos), &(stat.pcm.vel));
+#else
             stat.energy.calc(&system_soft[0], stat.n_real_loc, true);
+#endif
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
             stat.energy.getSumMultiNodes(true);
 #endif
@@ -1743,9 +1765,10 @@ public:
             stat.energy.ekin_sd = stat.energy.ekin;
             stat.energy.epot_sd = stat.energy.epot;
 #endif
+#ifndef RECORD_CM_IN_HEADER
             stat.calcCenterOfMass(&system_soft[0], stat.n_real_loc);
-            Ptcl::vel_cm = stat.pcm.vel;
-            //stat.calcAndShiftCenterOfMass(&system_soft[0], stat.n_real_loc, 1, true);
+#endif
+            //Ptcl::vel_cm = stat.pcm.vel;
 
         }
         else {
@@ -1754,8 +1777,11 @@ public:
             PS::F64 energy_old = stat.energy.ekin + stat.energy.epot;
             stat.energy.etot_sd_ref -= stat.energy.ekin_sd + stat.energy.epot_sd - energy_old;
 #endif
-
+#ifdef RECORD_CM_IN_HEADER
+            stat.energy.calc(&system_soft[0], stat.n_real_loc,false, &(stat.pcm.pos), &(stat.pcm.vel));
+#else
             stat.energy.calc(&system_soft[0], stat.n_real_loc);
+#endif
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
             stat.energy.getSumMultiNodes();
 #endif
@@ -1797,8 +1823,10 @@ public:
             system_hard_connected.energy.clear();
 #endif
 #endif
+#ifndef RECORD_CM_IN_HEADER
             stat.calcCenterOfMass(&system_soft[0], stat.n_real_loc);
-            Ptcl::vel_cm = stat.pcm.vel;
+#endif
+            //Ptcl::vel_cm = stat.pcm.vel;
         }
         //stat.shiftToCenterOfMassFrame(&system_soft[0], stat.n_real_loc);
 
@@ -1834,6 +1862,11 @@ public:
             file_header.n_body = stat.n_real_glb;
             file_header.time = stat.time;
             file_header.nfile++;
+#ifdef RECORD_CM_IN_HEADER
+            file_header.pos_offset = stat.pcm.pos;
+            file_header.vel_offset = stat.pcm.vel;
+#endif
+
             std::string fname = input_parameters.fname_snp.value+"."+std::to_string(file_header.nfile);
 #ifdef PETAR_DEBUG
             assert(system_soft.getNumberOfParticleLocal()== stat.n_all_loc);
@@ -1944,23 +1977,51 @@ public:
         system_hard_connected.n_neighbor_zero = 0;
 #endif
 #endif
-                                           
-        n_count.cluster_count(1, n_hard_single);
+        
+        n_count.clearClusterCount();
+        n_count.clusterCount(1, n_hard_single);
 
         const PS::S32  n_isolated_cluster = system_hard_isolated.getNumberOfClusters();
         n_count.cluster_isolated += n_isolated_cluster;
         n_count_sum.cluster_isolated += PS::Comm::getSum(n_isolated_cluster);
 
         const PS::S32* isolated_cluster_n_list = system_hard_isolated.getClusterNumberOfMemberList();
-        for (PS::S32 i=0; i<n_isolated_cluster; i++) n_count.cluster_count(isolated_cluster_n_list[i]);
+        for (PS::S32 i=0; i<n_isolated_cluster; i++) n_count.clusterCount(isolated_cluster_n_list[i]);
 
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         const PS::S32  n_connected_cluster = system_hard_connected.getNumberOfClusters();
         n_count.cluster_connected += n_connected_cluster;
         n_count_sum.cluster_connected += PS::Comm::getSum(n_connected_cluster);
         const PS::S32* connected_cluster_n_list = system_hard_connected.getClusterNumberOfMemberList();
-        for (PS::S32 i=0; i<n_connected_cluster; i++) n_count.cluster_count(connected_cluster_n_list[i]);
+        for (PS::S32 i=0; i<n_connected_cluster; i++) n_count.clusterCount(connected_cluster_n_list[i]);
 #endif
+
+#ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
+        PS::S32 cluster_hist_size_loc = n_count.n_cluster.size();
+        PS::S32 n_member_in_cluster_loc[cluster_hist_size_loc];
+        PS::S32 n_cluster_loc[cluster_hist_size_loc];
+        n_count.getherClusterCount(n_member_in_cluster_loc, n_cluster_loc, cluster_hist_size_loc);
+        PS::S32 cluster_hist_size_recv[n_proc];
+        PS::S32 cluster_hist_size_disp[n_proc+1];
+        PS::Comm::allGather(&cluster_hist_size_loc, 1, cluster_hist_size_recv);
+        cluster_hist_size_disp[0] = 0;
+        for (PS::S32 i=0; i<n_proc; i++){
+            cluster_hist_size_disp[i+1] = cluster_hist_size_recv[i] + cluster_hist_size_disp[i];
+        }
+        PS::S32 cluster_hist_size_total = cluster_hist_size_disp[n_proc];
+        PS::S32 n_member_in_cluster_recv[cluster_hist_size_total];
+        PS::S32 n_cluster_recv[cluster_hist_size_total];
+        PS::Comm::allGatherV(n_member_in_cluster_loc, cluster_hist_size_loc, 
+                             n_member_in_cluster_recv, cluster_hist_size_recv, cluster_hist_size_disp);
+        PS::Comm::allGatherV(n_cluster_loc, cluster_hist_size_loc, 
+                             n_cluster_recv, cluster_hist_size_recv, cluster_hist_size_disp);
+        for (PS::S32 i=0; i<cluster_hist_size_total; i++) {
+            n_count_sum.clusterCount(n_member_in_cluster_recv[i], n_cluster_recv[i]);
+        }
+#else
+        n_count_sum.addClusterCount(n_count);
+#endif
+
         dn_loop++;
 
     }
@@ -2028,8 +2089,8 @@ public:
             n_count_sum.dump(std::cout,PRINT_WIDTH,dn_loop);
             std::cout<<std::endl;
                 
-            std::cout<<"**** Number of members in clusters (local):\n";
-            n_count.printHist(std::cout,PRINT_WIDTH,dn_loop);
+            std::cout<<"**** Number of members in clusters (global):\n";
+            n_count_sum.printHist(std::cout,PRINT_WIDTH,dn_loop);
         }
 
         if(input_parameters.write_style.value>0) {
@@ -2287,7 +2348,7 @@ public:
             <<"    FDPS: see above FPDS Logo message\n";
         AR::printReference(fout);
         fout<<"    PeTar: Wang L., Iwasawa M., Nitadori K., Makino J., 2020, MNRAS, 497, 536\n";
-#ifdef BSE
+#ifdef BSE_BASE
         BSEManager::printReference(fout);
 #endif
 #ifdef GALPY
@@ -2320,9 +2381,11 @@ public:
 #endif
 
 #ifdef STELLAR_EVOLUTION
-        fout<<"Use stellare evolution method: ";
+        fout<<"Use stellar evolution method: ";
 #ifdef BSE
         fout<<"BSE\n";
+#elif MOBSE
+        fout<<"MOBSE\n";
 #else
         fout<<"Base\n";
 #endif
@@ -2356,6 +2419,10 @@ public:
 #ifdef P3T_64BIT
         fout<<"Use 64 bit SIMD n";
 #endif
+#endif
+
+#ifdef USE_FUGAKU
+        fout<<"Use Fugaku\n";
 #endif
 
 #ifdef USE_GPU
@@ -2426,7 +2493,7 @@ public:
         if (my_rank==0) input_parameters.print_flag=true;
         else input_parameters.print_flag=false;
         int read_flag = input_parameters.read(argc,argv);
-#ifdef BSE
+#ifdef BSE_BASE
         if (my_rank==0) bse_parameters.print_flag=true;
         else bse_parameters.print_flag=false;
         bse_parameters.read(argc,argv);
@@ -2508,16 +2575,17 @@ public:
                 fesc.open(fname_esc.c_str(), std::ofstream::out|std::ofstream::app);
             else {
                 fesc.open(fname_esc.c_str(), std::ofstream::out);
-                // write titles of columns
-                fesc<<std::setw(WRITE_WIDTH)<<"Time";
-                FPSoft::printColumnTitle(fesc,WRITE_WIDTH);
-                fesc<<std::endl;
+                // write titles of columns, will cause issue when gether different MPI ranks
+                // fesc<<std::setw(WRITE_WIDTH)<<"Time";
+                // FPSoft::printColumnTitle(fesc,WRITE_WIDTH);
+                // fesc<<std::endl;
             }
+            fesc<<std::setprecision(WRITE_PRECISION);
 
-#ifdef BSE
+#ifdef BSE_BASE
             // open SSE/BSE file
-            std::string fsse_name = fname_snp + ".sse." + my_rank_str;
-            std::string fbse_name = fname_snp + ".bse." + my_rank_str;
+            std::string fsse_name = fname_snp + fsse_par_suffix + "." + my_rank_str;
+            std::string fbse_name = fname_snp + fbse_par_suffix + "." + my_rank_str;
             if(input_parameters.append_switcher.value==1) {
                 hard_manager.ar_manager.interaction.fout_sse.open(fsse_name.c_str(), std::ofstream::out|std::ofstream::app);
                 hard_manager.ar_manager.interaction.fout_bse.open(fbse_name.c_str(), std::ofstream::out|std::ofstream::app);
@@ -2526,6 +2594,8 @@ public:
                 hard_manager.ar_manager.interaction.fout_sse.open(fsse_name.c_str(), std::ofstream::out);
                 hard_manager.ar_manager.interaction.fout_bse.open(fbse_name.c_str(), std::ofstream::out);
             }
+            hard_manager.ar_manager.interaction.fout_sse<<std::setprecision(WRITE_PRECISION);
+            hard_manager.ar_manager.interaction.fout_bse<<std::setprecision(WRITE_PRECISION);
 #endif 
 
 #ifdef ADJUST_GROUP_PRINT
@@ -2536,6 +2606,7 @@ public:
                     hard_manager.h4_manager.fgroup.open(fgroup_name.c_str(), std::ofstream::out|std::ofstream::app);
                 else 
                     hard_manager.h4_manager.fgroup.open(fgroup_name.c_str(), std::ofstream::out);
+                hard_manager.h4_manager.fgroup<<std::setprecision(WRITE_PRECISION);
             }
 #endif
         }
@@ -2576,9 +2647,14 @@ public:
     //! reading data set from file, filename is given by readParameters
     void readDataFromFile() {
         assert(read_parameters_flag);
+        if(input_parameters.fname_inp.value=="__NONE__") {
+            std::cerr<<"Error: the input data filename is not provided, make sure your options have the correct format."<<std::endl;
+            abort();
+        }
 
         PS::S32 data_format = input_parameters.data_format.value;
         auto* data_filename = input_parameters.fname_inp.value.c_str();
+                
         if(data_format==1||data_format==2||data_format==4)
             system_soft.readParticleAscii(data_filename, file_header);
         else
@@ -2596,6 +2672,18 @@ public:
         stat.time = file_header.time;
         stat.n_real_glb = stat.n_all_glb = n_glb;
         stat.n_real_loc = stat.n_all_loc = n_loc;
+#ifdef RECORD_CM_IN_HEADER
+        PS::F64 mass = 0.0;
+        for (int i=0; i<n_loc; i++) mass += system_soft[i].mass;
+#ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
+        stat.pcm.mass = PS::Comm::getSum(mass);
+#else        
+        stat.pcm.mass = mass;
+#endif
+        stat.pcm.pos = file_header.pos_offset;
+        stat.pcm.vel = file_header.vel_offset;
+        stat.pcm.is_center_shift_flag = true;
+#endif        
 
         input_parameters.n_glb.value = n_glb;
 
@@ -2644,7 +2732,11 @@ public:
         stat.time = 0.0;
         stat.n_real_glb = stat.n_all_glb = n_glb;
         stat.n_real_loc = stat.n_all_loc = n_loc;
-
+#ifdef RECORD_CM_IN_HEADER
+        stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 3, true);
+        file_header.pos_offset = stat.pcm.pos;
+        file_header.vel_offset = stat.pcm.vel;
+#endif
         input_parameters.n_glb.value = n_glb;
 
         read_data_flag = true;
@@ -2712,6 +2804,12 @@ public:
         stat.time = 0.0;
         stat.n_real_glb = stat.n_all_glb = n_glb;
         stat.n_real_loc = stat.n_all_loc = n_loc;
+#ifdef RECORD_CM_IN_HEADER
+        stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 3, true);
+
+        file_header.pos_offset = stat.pcm.pos;
+        file_header.vel_offset = stat.pcm.vel;
+#endif
 
         input_parameters.n_glb.value = n_glb;
 
@@ -2753,7 +2851,7 @@ public:
             system_soft[i].time_record = 0.0;
             system_soft[i].time_interrupt = 0.0;
             system_soft[i].binary_state = 0;
-#ifdef BSE
+#ifdef BSE_BASE
             system_soft[i].star.initial(mass[i]*bse_parameters.mscale.value);
 #endif
 #endif
@@ -2767,6 +2865,12 @@ public:
         stat.time = 0.0;
         stat.n_real_glb = stat.n_all_glb = n_glb;
         stat.n_real_loc = stat.n_all_loc = n_loc;
+
+#ifdef RECORD_CM_IN_HEADER
+        stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 1, true);
+        file_header.pos_offset = stat.pcm.pos;
+        file_header.vel_offset = stat.pcm.vel;
+#endif
 
         read_data_flag = true;
 
@@ -2825,6 +2929,12 @@ public:
         stat.n_real_glb = stat.n_all_glb = n_glb;
         stat.n_real_loc = stat.n_all_loc = n_loc;
 
+#ifdef RECORD_CM_IN_HEADER
+        stat.calcAndShiftCenterOfMass(&system_soft[0], n_loc, 1, true);
+        file_header.pos_offset = stat.pcm.pos;
+        file_header.vel_offset = stat.pcm.vel;
+#endif
+
         read_data_flag = true;
 
         delete [] mass;
@@ -2844,7 +2954,7 @@ public:
         // units
         if (input_parameters.unit_set.value==1) {
             input_parameters.gravitational_constant.value = 0.00449830997959438; // pc^3/(Msun*Myr^2)
-#ifdef BSE
+#ifdef BSE_BASE
             bse_parameters.tscale.value = 1.0; // Myr
             bse_parameters.rscale.value = 44353565.919218; // pc -> rsun
             bse_parameters.mscale.value = 1.0; // Msun
@@ -2853,7 +2963,7 @@ public:
             if(print_flag) {
                 std::cout<<"----- Unit set 1: Msun, pc, Myr -----\n"
                          <<"gravitational_constant = "<<input_parameters.gravitational_constant.value<<" pc^3/(Msun*Myr^2)\n";
-#ifdef BSE
+#ifdef BSE_BASE
                 std::cout<<"----- Unit conversion for BSE ----- \n"
                          <<" tscale = "<<bse_parameters.tscale.value<<"  Myr / Myr\n"
                          <<" mscale = "<<bse_parameters.mscale.value<<"  Msun / Msun\n"
@@ -3024,9 +3134,9 @@ public:
         Ptcl::r_search_min = r_search_min;
         Ptcl::mean_mass_inv = 1.0/mass_average;
         Ptcl::r_group_crit_ratio = r_bin/r_in;
-        Ptcl::vel_cm = vel_cm_glb;
+        //Ptcl::vel_cm = vel_cm_glb;
         escaper.r_escape_sq = input_parameters.r_escape.value*input_parameters.r_escape.value;
-	escaper.check_energy_flag = (input_parameters.r_escape.value>=0);
+        escaper.check_energy_flag = (input_parameters.r_escape.value>=0);
 
         if(print_flag) {
             std::cout<<"----- Parameter list: -----\n";
@@ -3086,20 +3196,25 @@ public:
                 // update research
                 if (input_parameters.update_rsearch_flag) {
                     if (pi_cm.mass!=0.0) {
-#ifdef GROUP_DATA_WRITE_ARTIFICIAL
+//#ifdef GROUP_DATA_WRITE_ARTIFICIAL
                         system_soft[i].r_search = std::max(r_search_min, vel_disp*dt_soft*search_vel_factor + system_soft[i].changeover.getRout());
-#else
-                        PS::F64 vcm = std::sqrt(pi_cm.vel*pi_cm.vel);
-                        system_soft[i].r_search = std::max(r_search_min,vcm*dt_soft*search_vel_factor + system_soft[i].changeover.getRout());
-#endif
+// not correct, when data is dumped, it is not cm information but artificial particle data
+//#else
+//                        PS::F64 vcm = std::sqrt(pi_cm.vel*pi_cm.vel);
+//                        system_soft[i].r_search = std::max(r_search_min,vcm*dt_soft*search_vel_factor + system_soft[i].changeover.getRout());
+//#endif
                     }
                     else system_soft[i].calcRSearch(dt_soft);
                 }
 
                 pi_cm.mass = pi_cm.vel.x = pi_cm.vel.y = pi_cm.vel.z = 0.0;
             }
+#ifdef RECORD_CM_IN_HEADER
+            stat.calcAndShiftCenterOfMass(&system_soft[0], stat.n_real_loc);
+#else
             stat.calcCenterOfMass(&system_soft[0], stat.n_real_loc);
-            Ptcl::vel_cm = stat.pcm.vel;
+#endif
+            //Ptcl::vel_cm = stat.pcm.vel;
         }
 
 #ifdef GALPY
@@ -3126,8 +3241,8 @@ public:
         hard_manager.h4_manager.step.eta_4th = input_parameters.eta.value;
         hard_manager.h4_manager.step.eta_2nd = 0.01*input_parameters.eta.value;
         hard_manager.h4_manager.step.calcAcc0OffsetSq(mass_average, r_out);
-        hard_manager.ar_manager.energy_error_relative_max = input_parameters.e_err_arc.value;
-        hard_manager.ar_manager.step_count_max = input_parameters.step_limit_arc.value;
+        hard_manager.ar_manager.energy_error_relative_max = input_parameters.e_err_ar.value;
+        hard_manager.ar_manager.step_count_max = input_parameters.step_limit_ar.value;
         hard_manager.ar_manager.step.initialSymplecticCofficients(-6);
         hard_manager.ar_manager.slowdown_pert_ratio_ref = input_parameters.sd_factor.value;
         hard_manager.ar_manager.slowdown_timescale_max = dt_soft*input_parameters.n_step_per_orbit.value;
@@ -3140,7 +3255,7 @@ public:
         hard_manager.ar_manager.interaction.stellar_evolution_option = input_parameters.stellar_evolution_option.value;
         if (write_style) hard_manager.ar_manager.interaction.stellar_evolution_write_flag = true;
         else hard_manager.ar_manager.interaction.stellar_evolution_write_flag = false;
-#ifdef BSE
+#ifdef BSE_BASE
         if (input_parameters.stellar_evolution_option.value==1) 
             hard_manager.ar_manager.interaction.bse_manager.initial(bse_parameters, print_flag);
 #endif
@@ -3196,9 +3311,9 @@ public:
             hard_manager.writeBinary(fpar_out);
             fclose(fpar_out);
 
-#ifdef BSE
+#ifdef BSE_BASE
             // save bse parameters
-            std::string fbse_par = input_parameters.fname_par.value + ".bse";
+            std::string fbse_par = input_parameters.fname_par.value + fbse_par_suffix;
             if (print_flag) std::cout<<"Save bse_parameters to file "<<fbse_par<<std::endl;
             if( (fpar_out = fopen(fbse_par.c_str(),"w")) == NULL) {
                 fprintf(stderr,"Error: Cannot open file %s.\n", fbse_par.c_str());
@@ -3279,7 +3394,7 @@ public:
 
         // >4 tree soft force
         /// calculate tree force with linear cutoff, save to system_soft.acc
-        treeSoftForce() ;
+        treeSoftForce();
 
         // >5 correct change over
         /// correct system_soft.acc with changeover, using system_hard and system_soft particles
@@ -3447,6 +3562,11 @@ public:
             // remove artificial and ununsed particles in system_soft.
             removeParticles();
 
+#ifdef RECORD_CM_IN_HEADER
+            // update center
+            stat.calcAndShiftCenterOfMass(&system_soft[0], stat.n_real_loc);
+#endif
+
             // >9. Domain decomposition
             domainDecompose();
 
@@ -3547,9 +3667,6 @@ public:
             // >6. kick 
             kick(dt_kick);
 
-            // correct Ptcl:vel_cm
-            correctPtclVelCM(dt_kick);
-
             // >7. write back data
             if(output_flag||interrupt_flag) {
                 // update global particle system due to kick
@@ -3627,8 +3744,6 @@ public:
 
                 kick(dt_kick);
 
-                // correct Ptcl:vel_cm
-                correctPtclVelCM(dt_kick);
             }
 
 
@@ -3668,7 +3783,7 @@ public:
         if (fprofile.is_open()) fprofile.close();
 #endif
 
-#ifdef BSE
+#ifdef BSE_BASE
         auto& interaction = hard_manager.ar_manager.interaction;
         if (interaction.fout_sse.is_open()) interaction.fout_sse.close();
         if (interaction.fout_bse.is_open()) interaction.fout_bse.close();

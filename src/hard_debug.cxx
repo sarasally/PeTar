@@ -29,12 +29,20 @@ int main(int argc, char **argv){
 #ifdef BSE
   int idum=0;
   std::string fbsepar = "input.par.bse";
+  std::string fbserandpar = "bse.rand.par";
+#elif MOBSE
+  int idum=0;
+  std::string fbsepar = "input.par.mobse";
+  std::string fbserandpar = "mobse.rand.par";
+#endif
+#ifdef STELLAR_EVOLUTION
+  int stellar_evolution_option = -1;
 #endif
 #ifdef SOFT_PERT
   bool soft_pert_flag=true;
 #endif
 
-  while ((arg_label = getopt(argc, argv, "k:E:A:a:D:d:e:s:m:b:p:i:Sh")) != -1)
+  while ((arg_label = getopt(argc, argv, "k:E:A:a:D:d:e:s:m:b:B:p:I:i:Sh")) != -1)
     switch (arg_label) {
     case 'k':
         slowdown_factor = atof(optarg);
@@ -73,12 +81,20 @@ int main(int argc, char **argv){
         soft_pert_flag=false;
         break;
 #endif
-#ifdef BSE
+#ifdef STELLAR_EVOLUTION
+    case 'I':
+        stellar_evolution_option = atoi(optarg);
+        break;
+#endif
+#ifdef BSE_BASE
     case 'i':
         idum = atoi(optarg);
         break;
     case 'b':
         fbsepar = optarg;
+        break;
+    case 'B':
+        fbserandpar = optarg;
         break;
 #endif
     case 'h':
@@ -96,8 +112,12 @@ int main(int argc, char **argv){
                  <<"    -d [int]:     hard time step min power (should use together with -D)\n"
                  <<"    -m [int]:     running mode: 0: evolve system to time_end; 1: stability check: "<<mode<<std::endl
                  <<"    -p [string]:  hard parameter file name: "<<fhardpar<<std::endl
-#ifdef BSE
+#ifdef STELLAR_EVOLUTION
+                 <<"    -I [int]:     Stellar evolution option: \n"
+#endif
+#ifdef BSE_BASE
                  <<"    -i [int]      random seed to generate kick velocity\n"
+                 <<"    -B [string]:  read bse random parameter dump file with filename: "<<fbserandpar<<"\n"
                  <<"    -b [string]:  bse parameter file name: "<<fbsepar<<std::endl
 #endif
 #ifdef SOFT_PERT
@@ -129,28 +149,48 @@ int main(int argc, char **argv){
   fclose(fpar_in);
 
 #ifdef STELLAR_EVOLUTION
+  if (stellar_evolution_option>=0) {
+      hard_manager.ar_manager.interaction.stellar_evolution_option = stellar_evolution_option;
+      if (stellar_evolution_option==0) 
+          hard_manager.ar_manager.interaction.stellar_evolution_write_flag = false;
+  }
+#ifdef BSE_BASE
 #ifdef BSE
-  std::cerr<<"BSE parameter file:"<<fbsepar<<std::endl;
+  std::string bse_name="BSE";
+  std::string fsse_suffix=".sse";
+  std::string fbse_suffix=".sse";
+#elif MOBSE
+  std::string bse_name="MOBSE";
+  std::string fsse_suffix=".mosse";
+  std::string fbse_suffix=".mobse";
+#endif // BSE/MOBSE
+  IOParamsBSE bse_io;
+  std::cerr<<bse_name<<" parameter file:"<<fbsepar<<std::endl;
   if( (fpar_in = fopen(fbsepar.c_str(),"r")) == NULL) {
       fprintf(stderr,"Error: Cannot open file %s.\n", fbsepar.c_str());
       abort();
   }
-  IOParamsBSE bse_io;
   bse_io.input_par_store.readAscii(fpar_in);
   fclose(fpar_in);
   if (idum!=0) bse_io.idum.value = idum;
   hard_manager.ar_manager.interaction.bse_manager.initial(bse_io);
 
+  std::cerr<<"Check "<<bse_name<<" rand parameter file: "<<fbserandpar<<std::endl;
+  hard_manager.ar_manager.interaction.bse_manager.readRandConstant(fbserandpar.c_str());
+
   if (hard_manager.ar_manager.interaction.stellar_evolution_write_flag) {
-      hard_manager.ar_manager.interaction.fout_sse.open((filename+".sse").c_str(), std::ofstream::out);
-      hard_manager.ar_manager.interaction.fout_bse.open((filename+".bse").c_str(), std::ofstream::out);
+      hard_manager.ar_manager.interaction.fout_sse.open((filename+fsse_suffix).c_str(), std::ofstream::out);
+      hard_manager.ar_manager.interaction.fout_bse.open((filename+fbse_suffix).c_str(), std::ofstream::out);
+      hard_manager.ar_manager.interaction.fout_sse<<std::setprecision(WRITE_PRECISION);
+      hard_manager.ar_manager.interaction.fout_bse<<std::setprecision(WRITE_PRECISION);      
   }
-#endif
-#endif
+#endif // BSE|MOBSE
+#endif //STELLAR_EVOLUTION
 
 #ifdef ADJUST_GROUP_PRINT
   if (hard_manager.h4_manager.adjust_group_write_flag) {
       hard_manager.h4_manager.fgroup.open((filename+".group").c_str(), std::ofstream::out);
+      hard_manager.h4_manager.fgroup<<std::setprecision(WRITE_PRECISION);
   }
 #endif
 
@@ -268,7 +308,7 @@ int main(int argc, char **argv){
   }
 
 #ifdef STELLAR_EVOLUTION
-#ifdef BSE
+#ifdef BSE_BASE
   auto& interaction = hard_manager.ar_manager.interaction;
   if (interaction.fout_sse.is_open()) interaction.fout_sse.close();
   if (interaction.fout_bse.is_open()) interaction.fout_bse.close();

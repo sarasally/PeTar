@@ -21,7 +21,7 @@ def dataProcessOne(file_path, result, time_profile, read_flag, **kwargs):
     result: dict
         The results, keys: lagr, core|core_read, esc_single, esc_binary, [bse]
         If read_flag = True, core_read is needed, else core is needed
-        If interrupt_mode = bse, bse is needed
+        If interrupt_mode = bse, mobse, BSE based stellar evolution is needed
     time_profile: dict
         The CPU (wallclock) time for each parts of calculations
     read_flag: bool
@@ -33,7 +33,8 @@ def dataProcessOne(file_path, result, time_profile, read_flag, **kwargs):
             average_mode: mode in calculating lagrangian radii (sphere)
             mass_fraction: an 1D numpy.ndarray to indicate the mass fractions to calculate lagrangian radii.
                                Default is np.array([0.1, 0.3, 0.5, 0.7, 0.9])
-            interrupt_mode: PeTar interrupt mode: base, bse, none. If not provided, type is none 
+            interrupt_mode: PeTar interrupt mode: base, bse, mobse, none. If not provided, type is none 
+            snapshot_format: snapshot format: ascii or binary (ascii)
     """
     lagr = result['lagr']
     esc_single  = result['esc_single']
@@ -41,34 +42,54 @@ def dataProcessOne(file_path, result, time_profile, read_flag, **kwargs):
 
     m_frac = lagr.initargs['mass_fraction']
     G=1.0
+    snapshot_format='ascii'
     r_bin=0.1
     average_mode='sphere'
     simple_binary=True
+    external_mode='none'
+    find_multiple=False
 
     if ('G' in kwargs.keys()): G=kwargs['G']
     if ('r_max_binary' in kwargs.keys()): r_bin=kwargs['r_max_binary']
     if ('average_mode' in kwargs.keys()): average_mode=kwargs['average_mode']
     if ('simple_binary' in kwargs.keys()): simple_binary=kwargs['simple_binary']
+    if ('snapshot_format' in kwargs.keys()): snapshot_format=kwargs['snapshot_format']
+    if ('external_mode' in kwargs.keys()): external_mode=kwargs['external_mode']
+    if ('find_multiple' in kwargs.keys()): find_multiple=kwargs['find_multiple']
 
-    header = PeTarDataHeader(file_path)
+    header = PeTarDataHeader(file_path, **kwargs)
     
     if (not read_flag):
         start_time = time.time()
 
         core = result['core']
         #print('Loadfile')
-        snap=np.loadtxt(file_path, skiprows=1)
-        particle=Particle(snap, **kwargs)
+        #snap=np.loadtxt(file_path, skiprows=1)
+        #particle=Particle(snap, **kwargs)
+        particle=Particle(**kwargs)
+        if (snapshot_format=='ascii'): particle.loadtxt(file_path, skiprows=1)
+        elif (snapshot_format=='binary'): 
+            if (external_mode!='none'):
+                particle.fromfile(file_path, offset=HEADER_OFFSET_WITH_CM)
+            else:
+                particle.fromfile(file_path, offset=HEADER_OFFSET)
+        else: raise ValueError('Snapshot format unknown, should be binary or ascii, given', snapshot_format)
         read_time = time.time()
 
         # find binary
         #print('Find pair')
         kdtree,single,binary=findPair(particle,G,r_bin,True,simple_binary)
+
         find_pair_time = time.time()
     
         # get cm, density
         #print('Get density')
         cm_pos, cm_vel=core.calcDensityAndCenter(particle,kdtree)
+
+        # add global offset
+        if (external_mode!='none'): 
+            core.pos[-1] += header.pos_offset
+            core.vel[-1] += header.vel_offset
         #print('cm pos:',cm_pos,' vel:',cm_vel)
         get_density_time = time.time()
 
@@ -91,9 +112,18 @@ def dataProcessOne(file_path, result, time_profile, read_flag, **kwargs):
         single.correctCenter(cm_pos, cm_vel)
         binary.correctCenter(cm_pos, cm_vel)
         center_and_r2_time = time.time()
+        
+        if (find_multiple): 
+            single_t, binary_t, triple_t, quadruple_t = findMultiple(single,binary,G,r_bin,simple_binary)
+            single_t.savetxt(file_path+'.single')
+            binary_t.savetxt(file_path+'.binary')
+            triple_t.savetxt(file_path+'.triple')
+            quadruple_t.savetxt(file_path+'.quadruple')
+        else:
+            single.savetxt(file_path+'.single')
+            binary.savetxt(file_path+'.binary')
 
-        single.savetxt(file_path+'.single')
-        binary.savetxt(file_path+'.binary')
+
     else:
         start_time = time.time()
         
@@ -119,12 +149,26 @@ def dataProcessOne(file_path, result, time_profile, read_flag, **kwargs):
         center_and_r2_time = read_time
     
 
-    if ('r_escape' in kwargs.keys()) : 
-        #print('b',single.size,binary.size)    
+    if ('r_escape' in kwargs.keys()):
         rcut = kwargs['r_escape']
-        single = esc_single.findEscaper(header.time, single, rcut)
-        binary = esc_binary.findEscaper(header.time, binary, rcut)
-        #print('a',single.size,binary.size,esc_single.size,esc_binary.size)
+
+        if (rcut == 'tidal'):
+            if (external_mode!='none'): 
+                tidal = result['tidal']
+                rcut, es_cut = tidal.calcTidalSphere(header.time, particle.mass, particle.r2, particle.pot_ext, rc, core.pos[-1], G);
+                single = esc_single.findEscaper(header.time, single, rcut, es_cut)
+                binary = esc_binary.findEscaper(header.time, binary, rcut, es_cut)
+            else:
+                raise ValueError('Escape radius is set to tidal radius but the external mode is off')
+        else:
+            if ('e_escape' in kwargs.keys()): 
+                es_cut = kwargs['e_escape']
+                single = esc_single.findEscaper(header.time, single, rcut, es_cut)
+                binary = esc_binary.findEscaper(header.time, binary, rcut, es_cut)
+            else:
+                single = esc_single.findEscaper(header.time, single, rcut)
+                binary = esc_binary.findEscaper(header.time, binary, rcut)
+                #print('a',single.size,binary.size,esc_single.size,esc_binary.size)
     
     #print('Lagrangian radius')
     lagr.calcOneSnapshot(header.time, single, binary, rc, average_mode)
@@ -173,6 +217,7 @@ def dataProcessList(file_list, read_flag, **kwargs):
     result['lagr']=LagrangianMultiple(**kwargs)
     result['esc_single']=SingleEscaper(**kwargs)
     result['esc_binary']=BinaryEscaper(**kwargs)
+    result['tidal']=Tidal(**kwargs)
 
     time_profile=dict()
     time_profile['read'] = 0.0
@@ -190,7 +235,7 @@ def dataProcessList(file_list, read_flag, **kwargs):
 
     if ('interrupt_mode' in kwargs.keys()): 
         interrupt_mode=kwargs['interrupt_mode']
-        if (interrupt_mode=='bse'):
+        if ('bse' in interrupt_mode):
             result['bse_status'] = BSEStatus()
             time_profile['bse'] = 0.0
 
@@ -223,7 +268,7 @@ def parallelDataProcessList(file_list, n_cpu=int(0), read_flag=False, **kwargs):
             average_mode: mode in calculating lagrangian radii (sphere)
             mass_fraction: an 1D numpy.ndarray to indicate the mass fractions to calculate lagrangian radii.
                                Default is np.array([0.1, 0.3, 0.5, 0.7, 0.9])
-            interrupt_mode: PeTar interrupt mode: base, bse, none. If not provided, type is none 
+            interrupt_mode: PeTar interrupt mode: base, bse, mobse, none. If not provided, type is none 
     """
     if (n_cpu==int(0)):
         n_cpu = mp.cpu_count()
@@ -251,7 +296,7 @@ def parallelDataProcessList(file_list, n_cpu=int(0), read_flag=False, **kwargs):
     result_all=dict()
     for i in range(n_cpu):
         resi = result[i].get()[0]
-        for key in ['lagr','core','esc_single','esc_binary','bse_status']:
+        for key in ['lagr','core','esc_single','esc_binary','bse_status','tidal']:
             if (key in resi.keys()):
                 if (not key in result_all.keys()):
                     result_all[key]=[]

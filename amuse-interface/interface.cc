@@ -66,9 +66,9 @@ extern "C" {
 #endif
         delete ptr;
         ptr=NULL;
-#ifdef INTERFACE_DEBUG_PRINT
-        if(ptr->my_rank==0) std::cout<<"PETAR: cleanup_code end\n";
-#endif
+//#ifdef INTERFACE_DEBUG_PRINT
+//        if(ptr->my_rank==0) std::cout<<"PETAR: cleanup_code end\n";
+//#endif
         return 0;
     }
 
@@ -181,6 +181,7 @@ extern "C" {
                   double * mass, 
                   double * x, double * y, double * z,
                   double * vx, double * vy, double * vz, double * radius){
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         int rank_mask = index==-1 ? 0 : ptr->my_rank;
@@ -237,6 +238,7 @@ extern "C" {
                   double mass, 
                   double x, double y, double z,
                   double vx, double vy, double vz, double radius) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -259,6 +261,7 @@ extern "C" {
     }
 
     int get_mass(int index_of_the_particle, double * mass) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         double mass_local = 0.0;
@@ -280,6 +283,7 @@ extern "C" {
     }
 
     int set_mass(int index_of_the_particle, double mass) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -295,6 +299,7 @@ extern "C" {
     }
 
     int get_radius(int index_of_the_particle, double * radius) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         double radius_local = 0.0;
@@ -316,6 +321,7 @@ extern "C" {
     }
 
     int set_radius(int index_of_the_particle, double radius) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -332,6 +338,7 @@ extern "C" {
 
     int set_position(int index_of_the_particle,
                      double x, double y, double z) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -350,6 +357,7 @@ extern "C" {
 
     int get_position(int index_of_the_particle,
                      double * x, double * y, double * z) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         int rank_mask = index==-1 ? 0 : ptr->my_rank;
@@ -391,6 +399,7 @@ extern "C" {
 
     int set_velocity(int index_of_the_particle,
                      double vx, double vy, double vz) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -409,6 +418,7 @@ extern "C" {
 
     int get_velocity(int index_of_the_particle,
                      double * vx, double * vy, double * vz) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         int rank_mask = index==-1 ? 0 : ptr->my_rank;
@@ -449,6 +459,7 @@ extern "C" {
     }
 
     int get_acceleration(int index_of_the_particle, double * ax, double * ay, double * az) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         int rank_mask = index==-1 ? 0 : ptr->my_rank;
@@ -489,6 +500,7 @@ extern "C" {
     }
 
     int set_acceleration(int index_of_the_particle, double ax, double ay, double az) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
         if (index>=0) {
             FPSoft* p = &(ptr->system_soft[index]);
@@ -506,6 +518,7 @@ extern "C" {
     }
 
     int get_potential(int index_of_the_particle, double * potential) {
+        reconstruct_particle_list();
         int index = ptr->getParticleAdrFromID(index_of_the_particle);
 #ifdef PARTICLE_SIMULATOR_MPI_PARALLEL
         double pot_local = 0.0;
@@ -530,6 +543,14 @@ extern "C" {
 #ifdef INTERFACE_DEBUG_PRINT
         if(ptr->my_rank==0) std::cout<<"PETAR: evolve models start\n";
 #endif
+
+        if (ptr->stat.n_real_glb==0) {// escape if no particle
+#ifdef INTERFACE_DEBUG_PRINT
+            if(ptr->my_rank==0) std::cout<<"PETAR: evolve models end\n";
+#endif
+            return 0;
+        }
+
         // check whether interrupted cases, exist, if so, copy back data to local particles
         int n_interrupt_isolated = ptr->system_hard_isolated.getNumberOfInterruptClusters();
         for (int i=0; i<n_interrupt_isolated; i++) {
@@ -828,6 +849,18 @@ extern "C" {
         return 0;
     }
 
+    // set gravitational constant
+    int set_gravitational_constant(double G) {
+        ptr->input_parameters.unit_set.value=-1;
+        ptr->input_parameters.gravitational_constant.value = G;
+        return 0;
+    }
+
+    // get gravitational constant
+    int get_gravitational_constant(double* G) {
+        *G = ptr->input_parameters.gravitational_constant.value;
+        return 0;
+    }
 
     int get_kinetic_energy(double * kinetic_energy) {
         // update particle array first if necessary

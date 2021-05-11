@@ -193,9 +193,11 @@ class Data:
         self.skiprows = 0
         self.generate_binary=2
         self.interrupt_mode = 'bse'
+        self.external_mode = 'none'
         self.G = 0.00449830997959438 # pc^3/(Msun*Myr^2)
         self.semi_max = 0.1
         self.cm_mode = 'density'
+        self.snapshot_format = 'ascii'
 
         for key in self.__dict__.keys():
             if (key in kwargs.keys()): self.__dict__[key] = kwargs[key]
@@ -221,14 +223,14 @@ class Data:
                 data['mass'] = np.ones(data['x'].size)
             data['t'] = file_path
         else:
-            header=petar.PeTarDataHeader(file_path)
+            header=petar.PeTarDataHeader(file_path, snapshot_format=self.snapshot_format, external_mode=self.external_mode)
             data['t'] = str(header.time)
 
             if (self.generate_binary>0):
                 if (self.generate_binary==2):
-                    single = petar.Particle(interrupt_mode=self.interrupt_mode)
-                    p1 = petar.Particle(interrupt_mode=self.interrupt_mode)
-                    p2 = petar.Particle(interrupt_mode=self.interrupt_mode)
+                    single = petar.Particle(interrupt_mode=self.interrupt_mode, external_mode=self.external_mode)
+                    p1 = petar.Particle(interrupt_mode=self.interrupt_mode, external_mode=self.external_mode)
+                    p2 = petar.Particle(interrupt_mode=self.interrupt_mode, external_mode=self.external_mode)
                     binary = petar.Binary(p1,p2)
                     if os.path.getsize(file_path+'.single')>0:
                         single.loadtxt(file_path+'.single')
@@ -240,7 +242,7 @@ class Data:
                     data['semi'] = binary.semi
                     data['ecc'] = binary.ecc
                     data['state'] = binary.p1.binary_state
-                    if (self.interrupt_mode=='bse'):
+                    if ('bse' in self.interrupt_mode):
                         data['lum'] = np.concatenate((single.star.lum, binary.p1.star.lum, binary.p2.star.lum))
                         data['rad'] = np.concatenate((single.star.rad, binary.p1.star.rad, binary.p2.star.rad))
                         data['type']= np.concatenate((single.star.type,binary.p1.star.type,binary.p2.star.type))
@@ -253,8 +255,9 @@ class Data:
                         data['temp_cm']= np.append(temp_single,temp_binary)
                         data['type_cm']= np.append(single.star.type,np.max([binary.p1.star.type,binary.p2.star.type],axis=0))
                 else:
-                    particles=petar.Particle(interrupt_mode=self.interrupt_mode)
-                    particles.loadtxt(file_path,skiprows=1)
+                    particles=petar.Particle(interrupt_mode=self.interrupt_mode, external_mode=self.external_mode)
+                    if (self.snapshot_format=='ascii'): particles.loadtxt(file_path, skiprows=1)
+                    else: particles.fromfile(file_path, offset=petar.HEADER_OFFSET)
                     kdtree,single,binary = petar.findPair(particles, self.G, self.semi_max*2.0, True)
                     data['x'] = particles.pos[:,0]
                     data['y'] = particles.pos[:,1]
@@ -262,7 +265,7 @@ class Data:
                     data['semi'] = binary.semi
                     data['ecc'] = binary.ecc
                     data['state'] = binary.p1.binary_state
-                    if (self.interrupt_mode=='bse'):
+                    if ('bse' in self.interrupt_mode):
                         data['lum'] = particles.star.lum
                         data['rad'] = particles.star.rad
                         data['type']= particles.star.type
@@ -279,15 +282,17 @@ class Data:
                         data['temp_cm']= np.append(temp_single,temp_binary)
                         data['type_cm']= np.append(single.star.type,np.max([binary.p1.star.type,binary.p2.star.type],axis=0))
             else:
-                particles=petar.Particle(interrupt_mode=self.interrupt_mode)
-                particles.loadtxt(file_path,skiprows=1)
+                particles=petar.Particle(interrupt_mode=self.interrupt_mode, external_mode=self.external_mode)
+                if (self.snapshot_format=='ascii'): particles.loadtxt(file_path, skiprows=1)
+                else: particles.fromfile(file_path, offset=petar.HEADER_OFFSET)
                 data['x'] = particles.pos[:,0]
                 data['y'] = particles.pos[:,1]
                 data['mass'] =particles.mass
-                if (self.interrupt_mode=='bse'):
+                if ('bse' in self.interrupt_mode):
                     data['lum'] = particles.star.lum
                     data['rad'] = particles.star.rad
                     data['type']= particles.star.type
+                    data['temp']= 5778*(data['lum']/(data['rad']*data['rad']))**0.25
         
     def correctCM(self, boxsize, pos):
         xcm = 0.0
@@ -296,10 +301,10 @@ class Data:
             xcm = pos[0]
             ycm = pos[1]
             if (self.generate_binary!=2): # data from petar.data.process already remove c.m. from core center
-                self.x = self.x-ycm
+                self.x = self.x-xcm
                 self.y = self.y-ycm
         elif (self.cm_mode=='density'):
-            nbins=100
+            nbins=1000
             xmid = np.average(np.abs(self.x))
             ymid = np.average(np.abs(self.y))
             #print(xmid,ymid)
@@ -314,12 +319,12 @@ class Data:
             xp,yp=np.where(counts>0.2*counts.max())
             m = counts[xp,yp]
             mtot = m.sum()
-            xcm=(xp*m).sum()/mtot/nbins*(xmax-xmin)+xmin
-            ycm=(yp*m).sum()/mtot/nbins*(ymax-ymin)+ymin
+            xcm=((xp*m).sum()/mtot+0.5)*(xmax-xmin)/nbins+xmin
+            ycm=((yp*m).sum()/mtot+0.5)*(ymax-ymin)/nbins+ymin
             self.x = self.x - xcm
             self.y = self.y - ycm
 
-            nbins=200
+            nbins=500
             xmid = np.average(np.abs(self.x))
             ymid = np.average(np.abs(self.y))
             xmin = -boxsize
@@ -333,8 +338,8 @@ class Data:
             xp,yp=np.where(counts>0.2*counts.max())
             m = counts[xp,yp]
             mtot = m.sum()
-            xcm2=(xp*m).sum()/mtot/nbins*(xmax-xmin)+xmin
-            ycm2=(yp*m).sum()/mtot/nbins*(ymax-ymin)+ymin
+            xcm2=((xp*m).sum()/mtot+0.5)*(xmax-xmin)/nbins+xmin
+            ycm2=((yp*m).sum()/mtot+0.5)*(ymax-ymin)/nbins+ymin
             self.x = self.x - xcm2
             self.y = self.y - ycm2
             xcm += xcm2
@@ -460,15 +465,25 @@ def initFig(model_list, frame_xsize, frame_ysize, ncol, nplots, compare_in_colum
         xsize = frame_xsize*nplots
     else:
         xsize = ncol*frame_xsize
-        nrow = nplots/ncol
+        nrow = int(nplots/ncol)
         if (nrow*ncol<nplots): nrow+=1
         ysize = nrow*frame_ysize
 
     fig, axe = plt.subplots(nrow,ncol,figsize=(xsize, ysize))
-    if (len(model_list)>1) & compare_in_column: axe=[[axe[i][j] for i in range(nrow)] for j in range(ncol)]
-    #if (nrow>1) & (ncol>1): axe=axe.flatten()
-    if (nrow==1) | (ncol==1): axe=[axe]
-    if (nrow==1) & (ncol==1): axe=[axe]
+    # axe should be two dimension, rows contain different models and columns contain different types of plots
+    if (len(model_list)>1):
+        if compare_in_column: 
+            if (nrow>1): # swap rows and columns
+                axe=[[axe[i][j] for i in range(nrow)] for j in range(ncol)]
+            else: 
+                axe=[[axe[i]] for i in range(ncol)] # enclose each model in additional []
+        else:
+            if (ncol==1): axe=[[axe[i]] for i in range(nrow)] # enclose each model in additional []
+    else:
+        # in only one model case, only one row exist, cols of plots should be flatten into one row and enclosed by []
+        if (nrow>1) & (ncol>1): axe=[axe.flatten()]  
+        if (nrow==1) | (ncol==1): axe=[axe] # one row or one column case, enclosed by []
+        if (nrow==1) & (ncol==1): axe=[axe] # only one plot case, one more [] is needed: axe should be 2D [[axe]]
     return fig, axe
 
 
@@ -543,14 +558,16 @@ if __name__ == '__main__':
         print("  -L [S]: add one panel of Lagrangian radii evolution, argument is filename of lagrangian data", lagr_file)
         print("  -G [F]: gravitational constant for calculating binary orbit: ",data.G)
         print("  -o [S]: output movie filename: ",output_file)
-        print("  -i    : Use previous generated png images to speed up the movie generation")
+        print("  -p    : Use previous generated png images to speed up the movie generation")
+        print("  -s [S]: snapshot format: binary or ascii: ", data.snapshot_format)
         print("  -l [S]: the filename of a list of pathes to different models, this will switch on the comparison mode.")
         print("          Each line contains two values: directory path of model, name of model.")
         print("          When data is reading, pathes will be added in front of the filenames. ")
         print("          Notice it is assumed that all reading data have the same naming style in each path.")
         print("          The number of snapshots should also be the same for all models.")
+        print("  -i  [S]: interrupt mode used in petar: no, base, bse, mobse: ",data.interrupt_mode)
+        print("  -t  [S]: external mode used in petar: no, galpy: ",data.external_mode)
         print("  --compare-in-column: in comparison mode, models are compared in columns instead of rows.")
-        print("  --interrupt-mode  [S]: no, base, bse: ",data.interrupt_mode)
         print("  --generate-binary [I]: 0: no binary, 1: detect binary by using KDtree (slow), 2: read single and binary data generated by petar.data.process: ", data.generate_binary)
         print("  --n-cpu       [I]: number of CPU processors to use: all CPU cores")
         print("  --lum-min     [F]: minimum lumonisity: ",phr.lum_min)
@@ -592,8 +609,8 @@ if __name__ == '__main__':
         print("     Each panel of plots can be added mutliple times (the order is recored)")
 
     try:
-        shortargs = 's:f:R:z:o:G:l:L:iHbh'
-        longargs = ['help','n-cpu=','lum-min=','lum-max=','temp-min=','temp-max=','semi-min=','semi-max=','ecc-min=','ecc-max=','rlagr-min=','rlagr-max=','rlagr-scale=','time-min=','time-max=','interrupt-mode=','xcol=','ycol=','mcol=','unit-length=','unit-time=','skiprows=','generate-binary=','plot-ncols=','plot-xsize=','plot-ysize=','suppress-images','format=','cm-mode=','core-file=','n-layer-cross=','n-layer-point=','layer-alpha=','marker-scale=','cm-boxsize=','compare-in-column']
+        shortargs = 's:f:R:z:o:G:l:L:i:t:p:sHbh'
+        longargs = ['help','n-cpu=','lum-min=','lum-max=','temp-min=','temp-max=','semi-min=','semi-max=','ecc-min=','ecc-max=','rlagr-min=','rlagr-max=','rlagr-scale=','time-min=','time-max=','xcol=','ycol=','mcol=','unit-length=','unit-time=','skiprows=','generate-binary=','plot-ncols=','plot-xsize=','plot-ysize=','suppress-images','format=','cm-mode=','core-file=','n-layer-cross=','n-layer-point=','layer-alpha=','marker-scale=','cm-boxsize=','compare-in-column']
         opts,remainder= getopt.getopt( sys.argv[1:], shortargs, longargs)
 
         kwargs=dict()
@@ -601,7 +618,7 @@ if __name__ == '__main__':
             if opt in ('-h','--help'):
                 usage()
                 sys.exit(1)
-            elif opt in ('-s'):
+            elif opt in ('-f'):
                 fps = float(arg)
             elif opt in ('-R'):
                 kwargs['boxsize'] = float(arg)
@@ -615,9 +632,7 @@ if __name__ == '__main__':
                 output_file = arg
             elif opt in ('-G'):
                 kwargs['G'] = float(arg)
-            elif opt in ('-f'):
-                fps = int(arg)
-            elif opt in ('-i'):
+            elif opt in ('-p'):
                 kwargs['use_previous'] = True
             elif opt in ('-l'):
                 model_path = arg
@@ -625,6 +640,12 @@ if __name__ == '__main__':
                 plot_item.append(['plot_lagr'])
                 lagr_file = arg
                 read_lagr_data=True
+            elif opt in ('-i'):
+                kwargs['interrupt_mode'] = arg
+            elif opt in ('-t'):
+                kwargs['external_mode'] = arg
+            elif opt in ('-s'):
+                kwargs['snapshot_format'] = arg
             elif opt in ('--n-cpu'):
                 n_cpu = int(arg)
             elif opt in ('--lum-min'):
@@ -653,8 +674,6 @@ if __name__ == '__main__':
                 kwargs['time_max'] = float(arg)
             elif opt in ('--rlagr-scale'):
                 kwargs['rlagr_scale'] = arg
-            elif opt in ('--interrupt-mode'):
-                kwargs['interrupt_mode'] = arg
             elif opt in ('--cm-mode'):
                 kwargs['cm_mode']= arg
             elif opt in ('--cm-boxsize'):
@@ -744,9 +763,11 @@ if __name__ == '__main__':
         
         file_part = [path_list[n_offset[i]:n_offset[i+1]] for i in range(n_cpu)]
         results=[None]*n_cpu
-        for rank in range(n_cpu):
-            #createImage(file_part[rank], model_list, frame_xsize, frame_ysize, ncol, plot_item, core, lagr, **kwargs)
-            results[rank]=pool.apply_async(createImage, (file_part[rank], model_list, frame_xsize, frame_ysize, ncol, plot_item, core, lagr), kwargs)
+        if (n_cpu==1):
+            createImage(file_part[0], model_list, frame_xsize, frame_ysize, ncol, plot_item, core, lagr, **kwargs)
+        else:
+            for rank in range(n_cpu):
+                results[rank]=pool.apply_async(createImage, (file_part[rank], model_list, frame_xsize, frame_ysize, ncol, plot_item, core, lagr), kwargs)
 
         # Step 3: Don't forget to close
         pool.close()

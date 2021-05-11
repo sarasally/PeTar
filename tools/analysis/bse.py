@@ -2,6 +2,14 @@
 
 from .base import *
 
+BSE_STAR_TYPE_INDEX={'LMS':0, 'MS':1, 'HG':2, 'GB':3, 'CHeB':4, 
+                     'FAGB':5, 'SAGB':6, 'HeMS':7, 'HeHG':8, 'HeGB':9, 
+                     'HeWD':10, 'COWD':11, 'ONWD':12, 'NS':13, 'BH':14, 'SN':15}
+
+BSE_STAR_TYPE_NAME={0:'LMS', 1:'MS', 2:'HG', 3:'GB', 4:'CHeB', 
+                    5:'FAGB', 6:'SAGB', 7:'HeMS', 8:'HeHG', 9:'HeGB', 
+                    10:'HeWD', 11:'COWD', 12:'ONWD', 13:'NS', 14:'BH', 15:'SN'}
+
 class SSEStarParameter(DictNpArrayMix):
     """ SSE star parameter class from bse_interface.h
     Keys: (class members)
@@ -19,7 +27,7 @@ class SSEStarParameter(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['type',1],['mass0',1],['mass',1],['rad',1],['mcore',1],['rcore',1],['spin',1],['epoch',1],['time',1],['lum',1]]
+        keys = [['type',np.int64],['mass0',np.float64],['mass',np.float64],['rad',np.float64],['mcore',np.float64],['rcore',np.float64],['spin',np.float64],['epoch',np.float64],['time',np.float64],['lum',np.float64]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 
@@ -33,7 +41,7 @@ class SSETypeChange(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['id',1],['init',SSEStarParameter],['final',SSEStarParameter]]
+        keys = [['id',np.int64],['init',SSEStarParameter],['final',SSEStarParameter]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 class SSESNKick(DictNpArrayMix):
@@ -46,7 +54,7 @@ class SSESNKick(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['id',1],['vkick',1],['star',SSEStarParameter]]
+        keys = [['id',np.int64],['vkick',np.float64],['star',SSEStarParameter]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 class SSEType(DictNpArrayMix):
@@ -72,7 +80,9 @@ class SSEType(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [["LMS",1], ["MS",1], ["HG",1], ["GB",1], ["CHeB",1], ["FABG",1], ["SABG",1], ["HeMS",1], ["HeHG",1], ["HeGB",1], ["HeWD",1], ["COWD",1], ["ONWD",1], ["NS",1], ["BH",1], ["SN",1]]
+        key_type=np.float64
+        if ('key_type' in kwargs.keys()): key_type=kwargs['key_type']
+        keys = [["LMS",key_type], ["MS",key_type], ["HG",key_type], ["GB",key_type], ["CHeB",key_type], ["FABG",key_type], ["SABG",key_type], ["HeMS",key_type], ["HeHG",key_type], ["HeGB",key_type], ["HeWD",key_type], ["COWD",key_type], ["ONWD",key_type], ["NS",key_type], ["BH",key_type], ["SN",key_type]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 class BSEBinaryEvent(DictNpArrayMix):
@@ -85,14 +95,14 @@ class BSEBinaryEvent(DictNpArrayMix):
         type2 (1D): stellar type of component 2
         semi (1D): semi-major axis (Rsun)
         ecc  (1D): eccentricity
-        rad1 (1D): stellar radius of component 1 (Rsun)
-        rad2 (1D): stellar radius of component 2 (Rsun)
+        rad1 (1D): stellar radius of component 1 (Roche radius 1)
+        rad2 (1D): stellar radius of component 2 (Roche radius 2)
         binary_type (1D): BSE binary type
     """
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['time',1],['m1',1],['m2',1],['type1',1],['type2',1],['semi',1],['ecc',1],['rad1',1],['rad2',1],['binary_type',1]]
+        keys = [['time',np.float64],['m1',np.float64],['m2',np.float64],['type1',np.float64],['type2',np.float64],['semi',np.float64],['ecc',np.float64],['rad1',np.float64],['rad2',np.float64],['binary_type',np.float64]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 class BSETypeChange(DictNpArrayMix):
@@ -109,8 +119,15 @@ class BSETypeChange(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['type',1],['init',BSEBinaryEvent],['final',BSEBinaryEvent],['id1',1],['id2',1],['drdv',1],['dr',1]]
+        keys = [['type',np.int64],['init',BSEBinaryEvent],['final',BSEBinaryEvent],['id1',np.int64],['id2',np.int64],['drdv',np.float64],['dr',np.float64]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
+
+    def generateBinaryID(self):
+        """ Use CantorPairing to map two components id to one binary id
+            Add new member bid 
+        """
+        bid = cantorPairing(self.id1, self.id2)
+        self.addNewMember('bid',bid)
 
 class BSESNKick(DictNpArrayMix):
     """ BSE SN kick output data from PeTar
@@ -124,8 +141,16 @@ class BSESNKick(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [['id1',1],['id2',1],['kindex',1],['vkick',1],['star',SSEStarParameter]]
+        keys = [['id1',np.int64],['id2',np.int64],['kindex',np.int64],['vkick',np.float64],['star',SSEStarParameter]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
+
+    def generateBinaryID(self):
+        """ Use CantorPairing to map two components id to one binary id
+            Add new member bid 
+        """
+        bid = cantorPairing(self.id1, self.id2)
+        self.addNewMember('bid',bid)
+
     
 class SSEStarParameterPair(DictNpArrayMix):
     """ SSE star parameter pair
@@ -155,7 +180,10 @@ class BSEDynamicMerge(DictNpArrayMix):
 
     kwargs['less_output'] (bool)
         True: 
-           class member (key) with the prefix '*" shown above are excluded (for old version of PeTar)
+           class member (key) with the prefix '*" shown above are excluded.
+           This option is for the old version of PeTar before Sep 10, 2020. 
+           Notice after the version of Oct 18, 2020, it is not need to use this option anymore.
+           The petar.data.gether automatically fills the three columns by zero (this means dr, t_peri and sd are not correct).
         False: (default)
            all members exists 
         
@@ -166,12 +194,20 @@ class BSEDynamicMerge(DictNpArrayMix):
         less_output = False
         if 'less_output' in kwargs.keys(): less_output = kwargs['less_output']
 
-        keys_bin = [['id1',1],['id2',1],['period',1],['semi',1],['ecc',1]]
-        keys_extra = [['dr',1],['t_peri',1],['sd',1]]
+        keys_bin = [['id1',np.int64],['id2',np.int64],['period',np.float64],['semi',np.float64],['ecc',np.float64]]
+        keys_extra = [['dr',np.float64],['t_peri',np.float64],['sd',np.float64]]
         keys_p= [['init',SSEStarParameterPair],['final',SSEStarParameterPair]]
         keys = keys_bin + keys_extra + keys_p
         if (less_output): keys = keys_bin + keys_p
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
+
+
+    def generateBinaryID(self):
+        """ Use CantorPairing to map two components id to one binary id
+            Add new member bid 
+        """
+        bid = cantorPairing(self.id1, self.id2)
+        self.addNewMember('bid',bid)
 
 #class BSESingleCount(DictNpArrayMix):
 #    """ BSE single event record
@@ -213,7 +249,9 @@ class BSEType(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [["Unset",1], ["Initial",1], ["Type_change",1], ["Start_Roche",1], ["End_Roche",1], ["Contact",1], ["Start_Symbiotic",1], ["End_Symbiotic",1], ["Common_envelop",1], ["Giant",1],[ "Coalescence",1], ["Blue_straggler",1], ["No_remain",1], ["Disrupt",1]]
+        key_type=np.float64
+        if ('key_type' in kwargs.keys()): key_type=kwargs['key_type']
+        keys = [["Unset",key_type], ["Initial",key_type], ["Type_change",key_type], ["Start_Roche",key_type], ["End_Roche",key_type], ["Contact",key_type], ["Start_Symbiotic",key_type], ["End_Symbiotic",key_type], ["Common_envelop",key_type], ["Giant",key_type],[ "Coalescence",key_type], ["Blue_straggler",key_type], ["No_remain",key_type], ["Disrupt",key_type]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
 
@@ -228,7 +266,9 @@ class BSENumberCount(DictNpArrayMix):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
         keys = [["single", SSEType], ["binary_one", SSEType], ["binary_both",SSEType]]
-        DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
+        kwargs_loc=kwargs.copy()
+        kwargs_loc['key_type']=np.int64
+        DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs_loc)
 
 
 class BSEStatus(DictNpArrayMix):
@@ -242,7 +282,7 @@ class BSEStatus(DictNpArrayMix):
     def __init__(self, _dat=None, _offset=int(0), _append=False, **kwargs):
         """ DictNpArrayMix type initialzation, see help(DictNpArrayMix.__init__)
         """
-        keys = [["time",1], ["count", BSENumberCount], ["mmax",SSEType], ["mave", SSEType]]
+        keys = [["time",np.float64], ["count", BSENumberCount], ["mmax",SSEType], ["mave", SSEType]]
         DictNpArrayMix.__init__(self, keys, _dat, _offset, _append, **kwargs)
 
     def findEvents(self, time, single, binary):
