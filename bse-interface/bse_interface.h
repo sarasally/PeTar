@@ -452,11 +452,11 @@ public:
     }
     
     int getEventNMax() const {
-        return 8;
+        return 80;
     }
     
     int getEventIndexInit() const {
-        return 8;
+        return 80;
     }
 
     int getType(const int index) const {
